@@ -2,7 +2,8 @@ import {
   acquireDistributedLock, 
   releaseDistributedLock, 
   releaseDistributedLockOnError,
-  getRateLimitStatus as getStorageRateLimitStatus 
+  getRateLimitStatus as getStorageRateLimitStatus,
+  getRateLimitStatusAsync as getStorageRateLimitStatusAsync
 } from './storage.ts';
 
 const MCP_ENDPOINT = 'https://questathon.aihackerscollective.com/api/public/mcp';
@@ -37,6 +38,15 @@ export function getRateLimitStatus(): {
   storageEngine: string;
 } {
   return getStorageRateLimitStatus();
+}
+
+export async function getRateLimitStatusAsync(): Promise<{
+  canCallNow: boolean;
+  secondsRemaining: number;
+  inFlight: boolean;
+  storageEngine: string;
+}> {
+  return getStorageRateLimitStatusAsync();
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCRMDataAsync } from '@/lib/data-store';
-import { getRateLimitStatus, getSafeToken } from '@/lib/mcp';
+import { getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { getStorageDiagnostics } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const data = await getCRMDataAsync();
-    const rateStatus = getRateLimitStatus();
+    const rateStatus = await getRateLimitStatusAsync();
     const storageDiag = getStorageDiagnostics();
     const hasToken = !!getSafeToken();
 

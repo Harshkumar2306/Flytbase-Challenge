@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { callTool, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
+import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendLiveSignalAsync, getCRMDataAsync } from '@/lib/data-store';
 import { getStorageDiagnostics } from '@/lib/storage';
 
@@ -14,7 +14,7 @@ async function handleSync() {
     }, { status: 400 });
   }
 
-  const rateCheck = getRateLimitStatus();
+  const rateCheck = await getRateLimitStatusAsync();
   if (!rateCheck.canCallNow) {
     const currentData = await getCRMDataAsync();
     return NextResponse.json({

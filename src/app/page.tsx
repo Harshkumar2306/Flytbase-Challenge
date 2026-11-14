@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
 import { EvidenceModal } from '@/components/EvidenceModal';
@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const [activeCalculation, setActiveCalculation] = useState<DealCalculation | null>(null);
   const [modalTitle, setModalTitle] = useState<string>('Evidence Receipt');
   const [requestedCitationId, setRequestedCitationId] = useState<string | null>(null);
+  const hasInitialSyncedRef = useRef(false);
 
   // Load CRM Data from server
   const loadData = async () => {
@@ -73,8 +74,13 @@ export default function DashboardPage() {
       }
     };
 
-    // Initial opportunistic background sync 3 seconds after initial page load
-    const initialSyncTimer = setTimeout(runBackgroundSync, 3000);
+    // Initial opportunistic background sync 3 seconds after initial page load (guarded against React double-mount)
+    const initialSyncTimer = setTimeout(() => {
+      if (!hasInitialSyncedRef.current) {
+        hasInitialSyncedRef.current = true;
+        runBackgroundSync();
+      }
+    }, 3000);
 
     // Continuous 65-second recurring background poll
     const syncInterval = setInterval(runBackgroundSync, 65000);

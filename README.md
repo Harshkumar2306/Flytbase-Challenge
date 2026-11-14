@@ -11,7 +11,7 @@ Designed for a Customer Success Manager or Account Director taking over two high
 2. **Aldermoor Industrial Group:** 15 plants, 14 docks under contract, contract expiration on 31 January 2027.
 
 Unlike traditional CRMs that store unvetted promises or optimistic sales totals, this system is an **evidence engine**:
-- **Separates backed reality from unbacked claims:** £731,440 (ECPA) and €140,000 (Aldermoor) supported pipeline vs. unevidenced champion ambitions.
+- **Separates backed reality from unbacked claims:** £350,000 (ECPA) and €140,000 (Aldermoor) executed contract baselines vs. £731,440 uncontracted morning discovery estimates and unbacked customer claims.
 - **Enforces stakeholder authority boundaries:** Identifies actual budget payers, procurement gates, and technical blockers.
 - **Generates prioritized Monday 9am action plans:** 3 ranked, dated, and owned moves per account based on transparent scoring.
 - **Audits critical failure modes:** Tracks the closing Metro Central autumn finance bid window and unreplied Group Finance emails.
@@ -25,7 +25,7 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 - **Signed Existing Contracts (Order Form Verified):**
   - **ECPA Baseline:** **£350,000/yr** (35 docks @ £10k/yr, verified by `doc_a_contract` and paid quarterly invoices).
   - **Aldermoor Baseline:** **€140,000/yr** (14 docks @ €10k/yr, verified by `doc_b_contract` and paid invoices).
-- **Qualified Morning Discovery Pipeline:**
+- **Qualified Morning Discovery Estimates (Uncontracted — Not Booked Revenue):**
   - **ECPA Pipeline:** **£731,440** across 4 qualified deals:
     - `a_renewal` (£136,361): 14 of 18 active flying docks verified in flight logs (`files/flight_log_force_month.csv`, fact `km_usage_1`).
     - `a_tarn` (£142,302): Blocker cleared by SRV engineering data-flow pack (`dataflow_pack.txt`, fact `srv_dataflow`).

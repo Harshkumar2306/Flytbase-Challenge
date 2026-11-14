@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { callTool, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
+import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendCRMNoteAsync } from '@/lib/data-store';
 import { getStoredNotesAsync } from '@/lib/storage';
 import { CRMNote } from '@/types/crm';
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     let syncState: 'synced' | 'saved_locally_pending' = 'saved_locally_pending';
 
     if (token) {
-      const rateCheck = getRateLimitStatus();
+      const rateCheck = await getRateLimitStatusAsync();
       if (rateCheck.canCallNow) {
         // Dispatch write_note to Questathon MCP
         mcpResult = await callTool('write_note', {

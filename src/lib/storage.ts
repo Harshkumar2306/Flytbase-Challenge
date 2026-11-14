@@ -11,7 +11,7 @@ const SIGNALS_KEY = 'signals.json';
 const META_KEY = 'sync_meta.json';
 
 export interface StorageDiagnostics {
-  engine: 'vercel_kv' | 'postgres' | 'atomic_file_store';
+  engine: 'vercel_kv' | 'atomic_file_store';
   engineDescription: string;
   isDistributed: boolean;
   notesCount: number;
@@ -29,12 +29,9 @@ interface McpLockRecord {
   nextAllowedTimestamp: number;
 }
 
-function detectStorageEngine(): 'vercel_kv' | 'postgres' | 'atomic_file_store' {
+function detectStorageEngine(): 'vercel_kv' | 'atomic_file_store' {
   if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
     return 'vercel_kv';
-  }
-  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
-    return 'postgres';
   }
   return 'atomic_file_store';
 }
@@ -222,6 +219,20 @@ export async function acquireDistributedLock(): Promise<{
  */
 export async function releaseDistributedLock(cooldownSeconds = 61): Promise<void> {
   const now = Date.now();
+
+  // If Vercel KV is configured, update or clear the shared lock key
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      if (cooldownSeconds === 0) {
+        await kvRestCommand(['DEL', 'questathon:mcp:lock']);
+      } else {
+        await kvRestCommand(['EXPIRE', 'questathon:mcp:lock', cooldownSeconds]);
+      }
+    } catch (e) {
+      console.error('Failed updating lock in Vercel KV:', e);
+    }
+  }
+
   const current = readLockRecord();
 
   // In atomic file store, unlock in-flight status while maintaining cooldown
@@ -240,6 +251,16 @@ export async function releaseDistributedLock(cooldownSeconds = 61): Promise<void
  */
 export async function releaseDistributedLockOnError(retryAfterSeconds = 61): Promise<void> {
   const now = Date.now();
+
+  // If Vercel KV is configured, ensure key cooldown persists in Redis
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      await kvRestCommand(['EXPIRE', 'questathon:mcp:lock', retryAfterSeconds]);
+    } catch (e) {
+      console.error('Failed setting cooldown in Vercel KV on error:', e);
+    }
+  }
+
   const current = readLockRecord();
 
   // Keep cooldown active conservatively: a request may have reached the server
@@ -250,6 +271,34 @@ export async function releaseDistributedLockOnError(retryAfterSeconds = 61): Pro
     nextAllowedTimestamp: Math.max(current.nextAllowedTimestamp, now + (retryAfterSeconds * 1000)),
   };
   writeLockRecord(updatedLock);
+}
+
+export async function getRateLimitStatusAsync(): Promise<{
+  canCallNow: boolean;
+  secondsRemaining: number;
+  inFlight: boolean;
+  storageEngine: string;
+}> {
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const ttl = await kvRestCommand<number>(['TTL', 'questathon:mcp:lock']);
+      if (typeof ttl === 'number' && ttl > 0) {
+        return {
+          canCallNow: false,
+          secondsRemaining: ttl,
+          inFlight: true,
+          storageEngine: 'vercel_kv',
+        };
+      }
+      return {
+        canCallNow: true,
+        secondsRemaining: 0,
+        inFlight: false,
+        storageEngine: 'vercel_kv',
+      };
+    } catch (_) {}
+  }
+  return getRateLimitStatus();
 }
 
 export function getRateLimitStatus(): {
@@ -486,8 +535,6 @@ export function getStorageDiagnostics(): StorageDiagnostics {
   const isDistributed = engine === 'vercel_kv';
   const engineDescription = engine === 'vercel_kv'
     ? 'Vercel KV REST (Multi-instance distributed store active across cold starts)'
-    : engine === 'postgres'
-    ? 'PostgreSQL Store (External relational persistence)'
     : 'Local Atomic File Store (Fallback for local dev/single instance; configure KV_REST_API_URL for distributed multi-instance deployment)';
 
   return {
