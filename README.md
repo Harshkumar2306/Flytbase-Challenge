@@ -82,8 +82,8 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 - **Styling:** Tailwind CSS (Navy enterprise design system)
 - **Icons:** Lucide React
 - **Validation:** Zod
-- **Data Persistence & Cache:** Server-side JSON store with atomic file updates
-- **MCP Client:** Server-side JSON-RPC 2.0 client with rate-limiting and token masking
+- **Data Persistence & Cache:** Multi-engine durable persistence (Vercel KV REST, Postgres, or atomic file store with POSIX rename staging)
+- **MCP Client:** Server-side JSON-RPC 2.0 client with distributed atomic rate-limiting lock (1 call/min) and zero token leakage
 
 ---
 
@@ -118,8 +118,8 @@ Questathon Public MCP Endpoint (https://questathon.aihackerscollective.com/api/p
 
 ### 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/flytbase-live-crm.git
-cd flytbase-live-crm
+git clone https://github.com/Harshkumar2306/Flytbase-Challenge.git
+cd Flytbase-Challenge
 ```
 
 ### 2. Configure Environment:
