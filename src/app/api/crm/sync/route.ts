@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { callTool, fetchRestEndpoint, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
+import { callTool, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
 import { appendLiveSignal, getCRMData } from '@/lib/data-store';
 
 export const dynamic = 'force-dynamic';
@@ -24,13 +24,8 @@ export async function POST() {
   }
 
   try {
-    // Attempt MCP tool call get_signals
-    let signalsResult = await callTool('get_signals', {});
-    
-    // Fallback to REST endpoint if MCP method encountered an issue
-    if (!signalsResult.success) {
-      signalsResult = await fetchRestEndpoint('/signals');
-    }
+    // Attempt MCP tool call get_signals. No immediate REST fallback to prevent violating 1 call/min rule!
+    const signalsResult = await callTool('get_signals', {});
 
     if (signalsResult.success && signalsResult.data) {
       const incoming = Array.isArray(signalsResult.data)
@@ -41,15 +36,19 @@ export async function POST() {
       let addedCount = 0;
 
       for (const sig of incoming) {
-        const exists = current.signals.some((s) => s.id === sig.id || s.text === sig.text);
+        // Derive stable ID from signal attributes (never random UUID)
+        const stableId = String(sig.id || sig.signal_id || (sig.text ? `sig_${Buffer.from(sig.text).toString('hex').slice(0, 16)}` : ''));
+        if (!stableId) continue;
+
+        const exists = current.signals.some((s) => s.id === stableId);
         if (!exists) {
           appendLiveSignal({
-            id: sig.id || `sig_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            id: stableId,
             timestamp: sig.timestamp || new Date().toISOString(),
             accountId: sig.account || sig.accountId,
             dealId: sig.dealId,
             text: sig.text || sig.message || JSON.stringify(sig),
-            sourceId: sig.sourceId || 'mcp_signal',
+            sourceId: sig.sourceId || 'get_signals',
           });
           addedCount++;
         }
@@ -58,8 +57,8 @@ export async function POST() {
       return NextResponse.json({
         success: true,
         message: addedCount > 0 
-          ? `Sync successful: ${addedCount} new signal(s) ingested.`
-          : 'Sync successful: No new signals on Questathon server.',
+          ? `Manual sync complete: ${addedCount} new signal(s) ingested from MCP.`
+          : 'Manual sync complete: No new signals on Questathon server.',
         newSignalsCount: addedCount,
         data: getCRMData(),
       });

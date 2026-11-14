@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, FileText, CheckCircle2, AlertTriangle, User, Hash, ExternalLink } from 'lucide-react';
+import { X, FileText, AlertTriangle, User, Hash, FileQuestion } from 'lucide-react';
 import { EvidenceReference, DealCalculation } from '@/types/crm';
 import { EvidenceBadge } from './EvidenceBadge';
 
@@ -11,6 +11,7 @@ interface EvidenceModalProps {
   evidence?: EvidenceReference | null;
   dealCalculation?: DealCalculation | null;
   title?: string;
+  requestedId?: string | null;
 }
 
 export const EvidenceModal: React.FC<EvidenceModalProps> = ({
@@ -19,6 +20,7 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
   evidence,
   dealCalculation,
   title,
+  requestedId,
 }) => {
   if (!isOpen) return null;
 
@@ -53,7 +55,7 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
         {/* Modal Content */}
         <div className="p-6 overflow-y-auto space-y-6 text-sm">
-          {evidence && (
+          {evidence ? (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="flex items-center gap-2">
@@ -67,18 +69,18 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                  Source Title
+                  Source Title / Document
                 </h4>
                 <p className="font-medium text-slate-800">{evidence.sourceTitle}</p>
               </div>
 
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                  Record Content / Quote
+                  Exact Record Content / Excerpt
                 </h4>
-                <blockquote className="p-3.5 bg-blue-50/60 border-l-3 border-blue-600 text-slate-800 italic rounded-r-md text-sm leading-relaxed">
-                  "{evidence.content}"
-                </blockquote>
+                <div className="p-3.5 bg-slate-50 border-l-3 border-blue-600 text-slate-800 rounded-r-md text-xs leading-relaxed max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
+                  {evidence.content}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -101,7 +103,7 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
                 )}
                 {evidence.filePath && (
                   <div className="p-2.5 bg-slate-50 rounded border border-slate-200 col-span-2">
-                    <span className="text-slate-500 block">Stored File Path:</span>
+                    <span className="text-slate-500 block">Repository File Path:</span>
                     <span className="font-mono font-medium text-slate-700 mt-0.5 block truncate">
                       {evidence.filePath}
                     </span>
@@ -117,7 +119,25 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
                 )}
               </div>
             </div>
-          )}
+          ) : requestedId ? (
+            /* Honest Source Not Found Block (NO FABRICATED DATA) */
+            <div className="p-6 bg-rose-50/50 rounded-xl border border-rose-200 text-center space-y-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 mx-auto">
+                <FileQuestion className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">
+                  Source Record Not Found in Repository
+                </h4>
+                <p className="text-xs text-rose-900 font-mono mt-1">
+                  Requested Citation ID: "{requestedId}"
+                </p>
+                <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
+                  This identifier was cited in notes or deals, but no corresponding file or fact exists in the Questathon records. Under strict system rules, no synthetic fallback text is generated.
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Deal Calculation Breakdown */}
           {dealCalculation && (
@@ -125,20 +145,20 @@ export const EvidenceModal: React.FC<EvidenceModalProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-600" />
                 <h4 className="font-semibold text-slate-900 text-sm">
-                  Exact Calculation Model
+                  Calculation & Evidence Grounding
                 </h4>
               </div>
 
               <div className="p-3 bg-slate-900 text-white rounded-lg font-mono text-xs">
                 <span className="text-slate-400 block text-[10px] uppercase mb-1">
-                  Formula:
+                  Formula / Classification:
                 </span>
                 {dealCalculation.formula}
               </div>
 
               <div>
                 <h5 className="text-xs font-semibold text-slate-600 mb-2">
-                  Calculation Inputs & Audit Trace:
+                  Inputs & Audit Sources:
                 </h5>
                 <div className="space-y-2">
                   {dealCalculation.inputs.map((inp, idx) => (

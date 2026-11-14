@@ -136,7 +136,7 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
                 No external signals emitted by server yet
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                The Questathon organizers emit live events during the afternoon. When an event fires, click "Poll get_signals Now" or allow the background polling to update this feed automatically.
+                The Questathon organizers emit live events during the session. Live synchronization is manual via the "Poll get_signals Now" button (or top bar "Sync MCP"), strictly enforcing the 1-call-per-minute token rate limit and preventing automated polling collisions.
               </p>
             </div>
           </div>

@@ -12,7 +12,8 @@ import {
   Shield,
   Layers,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FileText
 } from 'lucide-react';
 import { AccountData, Deal } from '@/types/crm';
 import { EvidenceBadge } from '../EvidenceBadge';
@@ -54,7 +55,7 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                 Question 1: What is the book worth?
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
-                Audited Provenance
+                Audited Financial Provenance
               </span>
             </div>
             <h1 className="text-xl font-bold text-slate-900 mt-0.5">
@@ -63,47 +64,59 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
           </div>
         </div>
         <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
-          Every deal value is divided into what we can mathematically back with ground-truth records versus what remains unbacked or claimed. No invented totals; no unevidenced champion claims silently merged into pipeline. Click any value to inspect its exact calculation inputs and source file IDs.
+          Financial accuracy audit: signed existing contracts are strictly separated from qualified future pipeline and speculative nominal caps. Operational flight logs and helicopter benchmarks are presented as blocker-clearance evidence rather than commercial pricing formulas.
         </p>
 
-        {/* Global Pipeline Ledger */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-          <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200">
-            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
-              Supported Book Total (ECPA)
+        {/* Global Financial Tripartite Strip */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+              1. Signed Existing Contracts
             </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-slate-900">£731,440</span>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-xl font-black text-slate-900">£350k + €140k</span>
               <EvidenceBadge status="verified" />
             </div>
-            <p className="text-[11px] text-emerald-900/80 mt-1 font-mono">
-              = £136,361 (renewal) + £142,302 (go-live) + £93,217 (scale) + £359,560 (tender)
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Verified by order forms (contract.txt) & paid invoices
             </p>
           </div>
 
-          <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200">
-            <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">
-              Supported Book Total (Aldermoor)
+          <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200">
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+              2. Qualified Morning Pipeline (ECPA)
             </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-slate-900">€140,000</span>
-              <EvidenceBadge status="verified" />
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-xl font-black text-slate-900">£731,440</span>
+              <EvidenceBadge status="told" />
             </div>
-            <p className="text-[11px] text-blue-900/80 mt-1 font-mono">
-              = €140,000 (14-dock contract baseline; unbacked claims shown apart)
+            <p className="text-[10px] text-emerald-900/80 mt-0.5">
+              Sum of 4 morning qualified deal valuations
             </p>
           </div>
 
-          <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200">
-            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
-              Total Unbacked Claims & Pitches
+          <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200">
+            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">
+              3. Total Nominal Potential Cap
             </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-amber-900">£1.57M + €1.41M</span>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-xl font-black text-slate-900">£2.30M + €350k</span>
+            </div>
+            <p className="text-[10px] text-blue-900/80 mt-0.5">
+              Maximum uncommitted opportunity caps (worth_up_to)
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200">
+            <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+              4. Unbacked Customer Claims
+            </span>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-xl font-black text-amber-900">€1.2M Savings</span>
               <EvidenceBadge status="claim" />
             </div>
-            <p className="text-[11px] text-amber-900/80 mt-1">
-              Shown strictly apart from supported book; requires customer validation.
+            <p className="text-[10px] text-amber-900/80 mt-0.5">
+              Stefan Roy claim; [No detail received]
             </p>
           </div>
         </div>
@@ -139,16 +152,23 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
 
               <div className="flex items-center gap-4 text-xs font-semibold">
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Supported</span>
+                  <span className="text-[10px] text-slate-400 block uppercase">Contract Baseline</span>
                   <span className="text-slate-900 text-sm font-bold">
+                    {currencySymbol}{acc.signedContractValue.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-6 w-px bg-slate-200" />
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block uppercase">Qualified Pipeline</span>
+                  <span className="text-blue-700 text-sm font-bold">
                     {currencySymbol}{acc.supportedPipeline.toLocaleString()}
                   </span>
                 </div>
                 <div className="h-6 w-px bg-slate-200" />
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Unbacked</span>
+                  <span className="text-[10px] text-slate-400 block uppercase">Nominal Cap</span>
                   <span className="text-slate-400 text-sm font-bold">
-                    {currencySymbol}{acc.unbackedPipeline.toLocaleString()}
+                    {currencySymbol}{acc.totalNominalPipeline.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -199,11 +219,6 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                           <div className="text-[11px] text-amber-700 flex items-center gap-1.5 font-medium">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>Deadline: {deal.deadline.text}</span>
-                            {deal.deadline.movesLeft && (
-                              <span className="font-bold underline">
-                                ({deal.deadline.movesLeft} moves left)
-                              </span>
-                            )}
                           </div>
                         )}
                       </div>
@@ -217,7 +232,7 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                           title="Click to inspect exact calculation and source IDs"
                         >
                           <span className="text-[10px] uppercase font-semibold text-slate-400 block">
-                            Supported Value
+                            {deal.supportedValue > 0 && deal.id.startsWith('b_') ? 'Contract Baseline' : 'Discovery Value'}
                           </span>
                           <div className="flex items-center justify-end gap-1.5">
                             <span className="text-base font-bold text-slate-900">
@@ -226,20 +241,20 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                             <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
                           </div>
                           <span className="text-[10px] text-emerald-700 font-semibold block">
-                            Receipt Verified
+                            {deal.supportedValue > 0 ? 'Receipt Backed' : '€0 supported'}
                           </span>
                         </div>
 
                         {/* Unbacked value box */}
                         <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-right opacity-80">
                           <span className="text-[10px] uppercase font-semibold text-slate-400 block">
-                            Unsupported / Unbacked
+                            Nominal Cap (worth_up_to)
                           </span>
-                          <span className="text-base font-bold text-slate-400 block">
-                            {currencySymbol}{deal.unsupportedValue.toLocaleString()}
+                          <span className="text-base font-bold text-slate-500 block">
+                            {currencySymbol}{deal.nominalValue.toLocaleString()}
                           </span>
                           <span className="text-[10px] text-slate-400 block">
-                            Nominal Max: {currencySymbol}{deal.nominalValue.toLocaleString()}
+                            Unbacked: {currencySymbol}{deal.unsupportedValue.toLocaleString()}
                           </span>
                         </div>
 
@@ -263,7 +278,7 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-white flex items-center gap-1.5">
                                 <Calculator className="w-3.5 h-3.5 text-blue-400" />
-                                Exact Calculation Formula
+                                Deal Grounding & Evidence Standard
                               </span>
                               <button
                                 onClick={() => onOpenCalculation(deal.id)}
@@ -275,7 +290,7 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                             <div className="font-mono text-emerald-400 text-xs">
                               {deal.calculation.formula}
                             </div>
-                            <p className="text-slate-400 text-[11px]">
+                            <p className="text-slate-400 text-[11px] leading-relaxed">
                               {deal.calculation.explanation}
                             </p>
                           </div>
@@ -284,33 +299,36 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                         {/* Supporting Evidence Items */}
                         <div>
                           <span className="text-xs font-semibold text-slate-700 block mb-2">
-                            Supporting Ground-Truth Evidence ({deal.evidenceIds.length} citations):
+                            Supporting Ground-Truth Records & Citations ({deal.evidenceIds.length}):
                           </span>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {deal.evidenceItems.map((ev) => (
-                              <div
-                                key={ev.id}
-                                onClick={() => onOpenEvidence(ev.id)}
-                                className="p-2.5 bg-slate-50 hover:bg-blue-50/60 rounded border border-slate-200 cursor-pointer transition-colors text-xs flex items-start justify-between gap-2"
-                              >
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-[10px] font-bold text-slate-700">
-                                      {ev.id}
-                                    </span>
-                                    {ev.saidBy && (
-                                      <span className="text-[10px] text-slate-500">
-                                        • {ev.saidBy}
+                            {deal.evidenceIds.map((evId) => {
+                              const ev = deal.evidenceItems.find((e) => e.id === evId);
+                              return (
+                                <div
+                                  key={evId}
+                                  onClick={() => onOpenEvidence(evId)}
+                                  className="p-2.5 bg-slate-50 hover:bg-blue-50/60 rounded border border-slate-200 cursor-pointer transition-colors text-xs flex items-start justify-between gap-2"
+                                >
+                                  <div className="truncate">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-mono text-[10px] font-bold text-slate-700">
+                                        {evId}
                                       </span>
-                                    )}
+                                      {ev?.saidBy && (
+                                        <span className="text-[10px] text-slate-500">
+                                          • {ev.saidBy}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 line-clamp-2 mt-0.5">
+                                      {ev ? `"${ev.content.slice(0, 100)}..."` : 'Source record in paperwork'}
+                                    </p>
                                   </div>
-                                  <p className="text-[11px] text-slate-600 line-clamp-2 mt-0.5">
-                                    "{ev.content}"
-                                  </p>
+                                  {ev ? <EvidenceBadge status={ev.factStatus} /> : <span className="text-[10px] text-slate-400">Record</span>}
                                 </div>
-                                <EvidenceBadge status={ev.factStatus} />
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
 

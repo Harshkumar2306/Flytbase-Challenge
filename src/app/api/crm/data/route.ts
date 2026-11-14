@@ -35,6 +35,8 @@ export async function GET() {
         accounts: data.accounts,
         signals: data.signals,
         notes: data.notes,
+        evidenceExplorer: data.evidenceExplorer,
+        evidenceMap: data.allEvidenceItems,
         overview: {
           totalSupportedPipelineGBP,
           totalNominalPipelineGBP,

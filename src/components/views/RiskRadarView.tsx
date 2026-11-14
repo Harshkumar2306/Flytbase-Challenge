@@ -14,19 +14,21 @@ import {
   CheckCircle2,
   HelpCircle
 } from 'lucide-react';
-import { AccountData, RiskItem, RiskSeverity } from '@/types/crm';
+import { AccountData, RiskItem, RiskSeverity, EvidenceReference, FactStatus } from '@/types/crm';
 import { EvidenceBadge } from '../EvidenceBadge';
 
 interface RiskRadarViewProps {
   accounts: AccountData[];
   selectedAccount: string;
   onOpenEvidence: (evidenceId: string) => void;
+  evidenceMap?: Record<string, EvidenceReference>;
 }
 
 export const RiskRadarView: React.FC<RiskRadarViewProps> = ({
   accounts,
   selectedAccount,
   onOpenEvidence,
+  evidenceMap = {},
 }) => {
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
 
@@ -38,6 +40,30 @@ export const RiskRadarView: React.FC<RiskRadarViewProps> = ({
   const displayedRisks = selectedSeverity === 'all'
     ? allRisks
     : allRisks.filter((r) => r.severity === selectedSeverity);
+
+  const getEvidenceStatus = (evId: string): FactStatus => {
+    if (evidenceMap && evidenceMap[evId]) {
+      return evidenceMap[evId].factStatus;
+    }
+    // Search in account deals
+    for (const acc of accounts) {
+      for (const d of acc.deals) {
+        const item = d.evidenceItems?.find((e) => e.id === evId);
+        if (item) return item.factStatus;
+      }
+    }
+    // Fallback based on genuine ID classification prefix
+    if (evId.includes('flight_log') || evId.includes('doc_') || evId.includes('srv_') || evId.includes('ticket')) {
+      return 'verified';
+    }
+    if (evId.includes('savings') || evId.includes('claim')) {
+      return 'claim';
+    }
+    if (evId.includes('km_') || evId.includes('eb_') || evId.includes('rc_') || evId.includes('email_') || evId.includes('hd_')) {
+      return 'told';
+    }
+    return 'unknown';
+  };
 
   const getSeverityBadge = (severity: RiskSeverity, color: string) => {
     switch (severity) {
@@ -240,7 +266,7 @@ export const RiskRadarView: React.FC<RiskRadarViewProps> = ({
                         <span className="font-mono text-[11px] font-semibold text-blue-700 truncate">
                           {evId}
                         </span>
-                        <EvidenceBadge status="verified" />
+                        <EvidenceBadge status={getEvidenceStatus(evId)} />
                       </button>
                     ))}
                   </div>

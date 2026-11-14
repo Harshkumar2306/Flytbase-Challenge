@@ -27,12 +27,14 @@ export default function DashboardPage() {
   const [signals, setSignals] = useState<LiveSignal[]>([]);
   const [notes, setNotes] = useState<CRMNote[]>([]);
   const [evidenceExplorerRecords, setEvidenceExplorerRecords] = useState<EvidenceRecord[]>([]);
+  const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceReference>>({});
 
   // Evidence Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeEvidence, setActiveEvidence] = useState<EvidenceReference | null>(null);
   const [activeCalculation, setActiveCalculation] = useState<DealCalculation | null>(null);
   const [modalTitle, setModalTitle] = useState<string>('Evidence Receipt');
+  const [requestedCitationId, setRequestedCitationId] = useState<string | null>(null);
 
   // Load CRM Data from server
   const loadData = async () => {
@@ -40,9 +42,11 @@ export default function DashboardPage() {
       const res = await fetch('/api/crm/data');
       const json = await res.json();
       if (json.success && json.data) {
-        setAccounts(json.data.accounts);
-        setSignals(json.data.signals);
-        setNotes(json.data.notes);
+        setAccounts(json.data.accounts || []);
+        setSignals(json.data.signals || []);
+        setNotes(json.data.notes || []);
+        setEvidenceExplorerRecords(json.data.evidenceExplorer || []);
+        setEvidenceMap(json.data.evidenceMap || {});
       }
     } catch (err) {
       console.error('Error fetching CRM data:', err);
@@ -55,38 +59,46 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  // Handler for opening evidence modal by ID
+  // Handler for opening genuine evidence modal by ID (NO FABRICATION)
   const handleOpenEvidence = (evidenceId: string) => {
-    // Find evidence item in any account deal or knowledge gap
-    let found: EvidenceReference | null = null;
-    for (const acc of accounts) {
-      for (const d of acc.deals) {
-        const ev = d.evidenceItems.find((e) => e.id === evidenceId);
-        if (ev) {
-          found = ev;
-          break;
-        }
-      }
-      if (found) break;
-    }
+    setRequestedCitationId(evidenceId);
 
+    // 1. Direct O(1) lookup in real evidenceMap
+    let found = evidenceMap[evidenceId] || null;
+
+    // 2. Search inside account deals if not in top-level map
     if (!found) {
-      found = {
-        id: evidenceId,
-        sourceType: 'paperwork',
-        sourceTitle: `Source Record ID: ${evidenceId}`,
-        content: `Audit citation referenced in account records. Verified during Questathon morning handover.`,
-        factStatus: evidenceId.startsWith('km_') || evidenceId.startsWith('rc_') || evidenceId.startsWith('fo_') || evidenceId.startsWith('eb_')
-          ? 'told'
-          : evidenceId.includes('flight') || evidenceId.includes('pack') || evidenceId.includes('ticket') || evidenceId.includes('heli')
-          ? 'verified'
-          : 'claim',
-      };
+      for (const acc of accounts) {
+        for (const d of acc.deals) {
+          const ev = d.evidenceItems.find((e) => e.id === evidenceId);
+          if (ev) {
+            found = ev;
+            break;
+          }
+        }
+        if (found) break;
+      }
     }
 
+    // 3. Search in evidence explorer records by path
+    if (!found) {
+      const matchedRecord = evidenceExplorerRecords.find((r) => r.path === evidenceId || evidenceId.endsWith(r.path));
+      if (matchedRecord) {
+        found = {
+          id: matchedRecord.path,
+          sourceType: matchedRecord.kind as any,
+          sourceTitle: `${matchedRecord.account}: ${matchedRecord.path}`,
+          content: matchedRecord.content,
+          factStatus: matchedRecord.kind === 'contract' || matchedRecord.kind === 'invoices' ? 'verified' : 'told',
+          recordPath: matchedRecord.path,
+        };
+      }
+    }
+
+    // If found, display genuine record; if null, display "Source not found" (NO INVENTED CONTENT)
     setActiveEvidence(found);
     setActiveCalculation(null);
-    setModalTitle(`Evidence Receipt: ${evidenceId}`);
+    setModalTitle(found ? `Evidence Receipt: ${evidenceId}` : `Audit Receipt Lookup: ${evidenceId}`);
     setIsModalOpen(true);
   };
 
@@ -104,6 +116,7 @@ export default function DashboardPage() {
     if (deal && deal.calculation) {
       setActiveCalculation(deal.calculation);
       setActiveEvidence(null);
+      setRequestedCitationId(null);
       setModalTitle(`Financial Calculation Model: ${deal.name}`);
       setIsModalOpen(true);
     }
@@ -187,6 +200,7 @@ export default function DashboardPage() {
                   accounts={accounts}
                   selectedAccount={selectedAccount}
                   onOpenEvidence={handleOpenEvidence}
+                  evidenceMap={evidenceMap}
                 />
               )}
 
@@ -207,13 +221,7 @@ export default function DashboardPage() {
 
               {currentTab === 'evidence' && (
                 <EvidenceExplorerView
-                  records={evidenceExplorerRecords.length > 0 ? evidenceExplorerRecords : [
-                    { path: 'contract.txt', kind: 'contract', account: 'ECPA (A)', summary: 'Signed contract 35 docks £350k', content: 'Customer: Eastern Counties Police Alliance. Signed 20 Jan 2026. 35 docks, £350,000/yr.' },
-                    { path: 'calls/2026-10-20_check_in.txt', kind: 'call', account: 'ECPA (A)', summary: 'Check-in with Rhys Calder', content: 'Rhys Calder: All 4 forces keen on 300-dock framework, but spec lacks costed operating model.' },
-                    { path: 'contract.txt', kind: 'contract', account: 'Aldermoor (B)', summary: 'Signed contract 14 docks €140k', content: 'Customer: Aldermoor Industrial Group. Signed 15 Jan 2026 by Stefan Roy. 14 docks, €140,000/yr.' },
-                    { path: 'emails/2026-10-08_finance_mailbox.txt', kind: 'email', account: 'Aldermoor (B)', summary: 'Group Finance renewal inquiry', content: 'From Group Finance: Before a renewal is raised, please send the quote in a form that shows the cost for each plant.' },
-                    { path: 'emails/2026-07-16_stefan_savings.txt', kind: 'email', account: 'Aldermoor (B)', summary: 'Stefan Roy ROI claim', content: 'Stefan: ROI is proven, about 1.2 million euros a year saved. Thirteen of fifteen plants are flying. [No detail received]' }
-                  ]}
+                  records={evidenceExplorerRecords}
                   selectedAccount={selectedAccount}
                 />
               )}
@@ -240,6 +248,7 @@ export default function DashboardPage() {
         evidence={activeEvidence}
         dealCalculation={activeCalculation}
         title={modalTitle}
+        requestedId={requestedCitationId}
       />
     </div>
   );

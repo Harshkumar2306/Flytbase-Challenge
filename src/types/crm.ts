@@ -17,7 +17,7 @@ export type RiskSeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
 export interface EvidenceReference {
   id: string;
-  sourceType: 'file' | 'person' | 'paperwork' | 'contract' | 'email' | 'call' | 'ticket' | 'calculation';
+  sourceType: 'file' | 'person' | 'paperwork' | 'contract' | 'email' | 'call' | 'ticket' | 'calculation' | 'fact';
   sourceTitle: string;
   content: string;
   factStatus: FactStatus;
@@ -45,7 +45,7 @@ export interface Deal {
   name: string;
   currency: string;
   nominalValue: number; // e.g. worth_up_to or contract value
-  supportedValue: number; // evidenced value
+  supportedValue: number; // evidenced value or qualified progression value
   unsupportedValue: number; // unevidenced amount
   stage: DealStage;
   statusText: string;
@@ -156,6 +156,8 @@ export interface AccountData {
   officialStory: string;
   sector: string;
   currency: string;
+  signedContractValue: number; // Contract baseline revenue verified by order form
+  futurePipelineEstimate: number; // Qualified deals in discovery
   supportedPipeline: number;
   unbackedPipeline: number;
   totalNominalPipeline: number;
@@ -201,6 +203,7 @@ export interface CRMNote {
   text: string;
   createdAt: string;
   author: string;
+  syncStatus?: 'synced' | 'saved_locally_pending';
 }
 
 export interface EvidenceRecord {

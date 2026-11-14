@@ -91,14 +91,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-lg border border-slate-200/80 cursor-pointer transition-colors"
           >
             <span className="text-[11px] font-medium text-slate-500 block">
-              Supported Book Value (UK)
+              Signed Baseline (UK + EU)
             </span>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-xl font-bold text-slate-900">£731,440</span>
-              <span className="text-[10px] text-emerald-600 font-semibold">100% Backed</span>
+              <span className="text-xl font-bold text-slate-900">£350k + €140k</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">Contract Verified</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">
-              Nominal max: £2,300,000 (4 deals)
+              Order forms & paid invoices
             </span>
           </div>
 
@@ -107,14 +107,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-lg border border-slate-200/80 cursor-pointer transition-colors"
           >
             <span className="text-[11px] font-medium text-slate-500 block">
-              Supported Book Value (EU)
+              Qualified Morning Pipeline
             </span>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-xl font-bold text-slate-900">€140,000</span>
-              <span className="text-[10px] text-amber-600 font-semibold">Finance Blocker</span>
+              <span className="text-xl font-bold text-blue-700">£731,440</span>
+              <span className="text-[10px] text-blue-600 font-semibold">4 Deals Model</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">
-              14 docks contract baseline
+              Nominal cap: £2.3M | €1.2M savings claim
             </span>
           </div>
 
@@ -447,7 +447,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               No new signals on Questathon server yet.
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              The CRM polls and listens for events automatically. You can also trigger an immediate sync using the "Sync MCP" button in the top bar.
+              Sync with Questathon MCP is manual to strictly respect the 1 call per minute rate limit across instances. Click "Sync MCP" in the top bar or "Poll get_signals Now" in Live Events to pull new signals.
             </p>
           </div>
         ) : (

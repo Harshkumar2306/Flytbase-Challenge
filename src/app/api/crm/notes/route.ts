@@ -34,32 +34,38 @@ export async function POST(req: Request) {
     }
 
     const token = getSafeToken();
-    let mcpResult = null;
+    let mcpResult: any = null;
+    let syncState: 'synced' | 'saved_locally_pending' = 'saved_locally_pending';
 
     if (token) {
       const rateCheck = getRateLimitStatus();
       if (rateCheck.canCallNow) {
-        // Send write_note to Questathon MCP
+        // Dispatch write_note to Questathon MCP
         mcpResult = await callTool('write_note', {
-          text,
+          text: text.trim(),
           account: account || undefined,
           kind,
-          title: title || undefined,
+          title: title ? title.trim() : undefined,
         });
-      } else {
-        // Note: if rate limited on MCP, we still save locally with status pending remote push
-        console.warn(`Rate limit in effect for write_note (${rateCheck.secondsRemaining}s remaining). Saving locally.`);
+
+        if (mcpResult.success) {
+          syncState = 'synced';
+        }
       }
     }
 
+    // Stable note identifier
+    const noteId = `note_${Date.now()}_${Buffer.from(text.trim()).toString('hex').slice(0, 8)}`;
+
     const newNote: CRMNote = {
-      id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: noteId,
       accountId: account || 'All Accounts',
       kind,
-      title: title || (kind.toUpperCase() + ': ' + text.slice(0, 30)),
-      text,
+      title: title ? title.trim() : (kind.toUpperCase() + ': ' + text.slice(0, 30)),
+      text: text.trim(),
       createdAt: new Date().toISOString(),
-      author: 'Account Manager (You)',
+      author: 'Account Manager',
+      syncStatus: syncState,
     };
 
     appendCRMNote(newNote);
@@ -67,8 +73,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       note: newNote,
-      mcpStatus: mcpResult ? (mcpResult.success ? 'synced' : 'mcp_error') : 'saved_locally',
-      mcpError: mcpResult?.error,
+      mcpStatus: syncState,
+      mcpError: mcpResult && !mcpResult.success ? mcpResult.error : undefined,
     });
   } catch (err: any) {
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { 
+import type { 
   AccountData, 
   Deal, 
   Stakeholder, 
@@ -12,24 +12,55 @@ import {
   CRMNote,
   EvidenceRecord,
   FactStatus 
-} from '@/types/crm';
+} from '../types/crm';
 
-// Path helpers
 const DATA_DIR = path.join(process.cwd(), 'data');
+const TMP_DIR = '/tmp';
 
 function readJsonFile<T = any>(filename: string, fallback: T): T {
+  // Check /tmp first for runtime state (serverless safe), then data/ directory
+  const tmpPath = path.join(TMP_DIR, filename);
+  const dataPath = path.join(DATA_DIR, filename);
+
   try {
-    const fullPath = path.join(DATA_DIR, filename);
-    if (!fs.existsSync(fullPath)) return fallback;
-    const content = fs.readFileSync(fullPath, 'utf8');
-    return JSON.parse(content);
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch (_) {}
+
+  try {
+    if (fs.existsSync(dataPath)) {
+      const content = fs.readFileSync(dataPath, 'utf8');
+      return JSON.parse(content);
+    }
   } catch (err) {
     console.error(`Error reading ${filename}:`, err);
-    return fallback;
+  }
+
+  return fallback;
+}
+
+function writeJsonFileSafely(filename: string, data: any) {
+  const content = JSON.stringify(data, null, 2);
+
+  // Attempt write to /tmp first (always writable in Vercel serverless)
+  try {
+    const tmpPath = path.join(TMP_DIR, filename);
+    fs.writeFileSync(tmpPath, content, 'utf8');
+  } catch (err) {
+    console.error(`Failed to write /tmp/${filename}:`, err);
+  }
+
+  // Attempt write to project data directory if writable (local dev)
+  try {
+    const dataPath = path.join(DATA_DIR, filename);
+    fs.writeFileSync(dataPath, content, 'utf8');
+  } catch (_) {
+    // Expected on read-only serverless runtimes
   }
 }
 
-// In-memory cache for fast renders
 let cachedCRMData: {
   accounts: AccountData[];
   signals: LiveSignal[];
@@ -47,146 +78,157 @@ export function loadNormalizedCRMData() {
   const signalsData = readJsonFile<any>('signals.json', { signals: [] });
   const notesData = readJsonFile<any>('notes.json', { notes: [] });
 
-  // Map of all known evidence items
+  // Read actual raw file contents from data/files/
+  const flightLogFile = readJsonFile<any>('files/flight_log_force_month.json', null);
+  const heliCostFile = readJsonFile<any>('files/helicopter_cost_overtime.json', null);
+  const dataflowPackFile = readJsonFile<any>('files/dataflow_pack.json', null);
+  const ticketHistoryFile = readJsonFile<any>('files/support_ticket_history.json', null);
+
+  // Map of all REAL evidence items (NO fabricated generic fallbacks)
   const evidenceMap: Record<string, EvidenceReference> = {};
 
-  // Register all facts from Account A
+  // 1. Index all real facts from export_raw.json (Preserving exact status: verified, told, claim)
   const rawFactsA: any[] = exportData.accounts?.[0]?.facts || [];
   rawFactsA.forEach((f: any) => {
     evidenceMap[f.id] = {
       id: f.id,
-      sourceType: f.status === 'verified' ? 'file' : 'person',
+      sourceType: 'fact',
       sourceTitle: `Fact ${f.id} (${f.said_by})`,
       content: f.text,
-      factStatus: f.status,
+      factStatus: f.status as FactStatus,
       saidBy: f.said_by,
       verifiedBy: f.verified_by,
       learnedAtMinute: f.learned_at_minute,
     };
   });
 
-  // Register files from Account A
-  evidenceMap['flight_log_force_month'] = {
-    id: 'flight_log_force_month',
-    sourceType: 'file',
-    sourceTitle: 'Flight Log Force Month (files/flight_log_force_month.csv)',
-    content: 'Operational flight logs verifying 14 of 18 docks active in Westmere & Metro Central.',
-    factStatus: 'verified',
-    filePath: 'files/flight_log_force_month.csv',
-  };
+  // 2. Index real files from data/files/
+  if (flightLogFile) {
+    evidenceMap['flight_log_force_month'] = {
+      id: 'flight_log_force_month',
+      sourceType: 'file',
+      sourceTitle: 'Flight Log Force Month (files/flight_log_force_month.csv)',
+      content: flightLogFile.text || 'flight_log_force_month.csv content',
+      factStatus: 'verified',
+      filePath: 'files/flight_log_force_month.csv',
+    };
+  }
 
-  evidenceMap['helicopter_cost_overtime'] = {
-    id: 'helicopter_cost_overtime',
-    sourceType: 'file',
-    sourceTitle: 'Helicopter Cost Overtime (files/helicopter_cost_overtime.csv)',
-    content: 'All-in benchmark £1,500/hr helicopter cost vs drone operational overtime model.',
-    factStatus: 'verified',
-    filePath: 'files/helicopter_cost_overtime.csv',
-  };
+  if (heliCostFile) {
+    evidenceMap['helicopter_cost_overtime'] = {
+      id: 'helicopter_cost_overtime',
+      sourceType: 'file',
+      sourceTitle: 'Helicopter Cost Overtime (files/helicopter_cost_overtime.csv)',
+      content: heliCostFile.text || 'helicopter_cost_overtime.csv content',
+      factStatus: 'verified',
+      filePath: 'files/helicopter_cost_overtime.csv',
+    };
+  }
 
-  evidenceMap['dataflow_pack'] = {
-    id: 'dataflow_pack',
-    sourceType: 'file',
-    sourceTitle: 'Dataflow Pack (files/dataflow_pack.csv)',
-    content: 'Technical data flow specifications, retention periods, video storage locations and access controls.',
-    factStatus: 'verified',
-    filePath: 'files/dataflow_pack.csv',
-  };
+  if (dataflowPackFile) {
+    const dataflowRef: EvidenceReference = {
+      id: 'srv_dataflow',
+      sourceType: 'file',
+      sourceTitle: 'Dataflow Pack: Tarn Valley Constabulary (dataflow_pack.txt)',
+      content: dataflowPackFile.text || '',
+      factStatus: 'verified',
+      filePath: 'files/dataflow_pack.txt',
+    };
+    evidenceMap['srv_dataflow'] = dataflowRef;
+    evidenceMap['dataflow_pack'] = dataflowRef;
+  }
 
-  evidenceMap['support_ticket_history'] = {
-    id: 'support_ticket_history',
-    sourceType: 'file',
-    sourceTitle: 'Support Ticket History (files/support_ticket_history.csv)',
-    content: 'Ticket log showing unanswered Tarn Valley DPIA request from 4 months prior.',
-    factStatus: 'verified',
-    filePath: 'files/support_ticket_history.csv',
-  };
+  if (ticketHistoryFile) {
+    evidenceMap['support_ticket_history'] = {
+      id: 'support_ticket_history',
+      sourceType: 'file',
+      sourceTitle: 'Support Ticket History (files/support_ticket_history.csv)',
+      content: ticketHistoryFile.text || 'support_ticket_history.csv content',
+      factStatus: 'verified',
+      filePath: 'files/support_ticket_history.csv',
+    };
+  }
 
-  // Register Account A Paperwork Records
-  evidenceMap['doc_a_contract'] = {
-    id: 'doc_a_contract',
-    sourceType: 'contract',
-    sourceTitle: 'ECPA Signed Order Form (contract.txt)',
-    content: 'Signed 20 Jan 2026. £350,000/yr for 35 docks. Term: 1 Mar 2026 to 28 Feb 2027. Invoiced in 4 parts. Paid.',
-    factStatus: 'verified',
-    recordPath: 'contract.txt',
-  };
+  // 3. Index actual paperwork records from Account A & B
+  paperworkA.records?.forEach((r: any) => {
+    const recordContent = r.text || (r.data ? JSON.stringify(r.data, null, 2) : '');
+    const isContractOrInvoice = r.kind === 'contract' || r.kind === 'invoices' || r.kind === 'flights' || r.kind === 'devices';
+    evidenceMap[`A:${r.path}`] = {
+      id: `A:${r.path}`,
+      sourceType: r.kind || 'paperwork',
+      sourceTitle: `ECPA: ${r.path}`,
+      content: recordContent,
+      factStatus: isContractOrInvoice ? 'verified' : 'told',
+      recordPath: r.path,
+    };
+    // Also index common root paths directly
+    if (['contract.txt', 'invoices.json', 'profile.json', 'internal_notes.json', 'deal_history.json'].includes(r.path)) {
+      evidenceMap[`doc_a_${r.path.replace(/\.[^.]+$/, '')}`] = {
+        id: `doc_a_${r.path.replace(/\.[^.]+$/, '')}`,
+        sourceType: r.kind || 'paperwork',
+        sourceTitle: `ECPA: ${r.path}`,
+        content: recordContent,
+        factStatus: isContractOrInvoice ? 'verified' : 'told',
+        recordPath: r.path,
+      };
+    }
+  });
 
-  evidenceMap['doc_a_invoices'] = {
-    id: 'doc_a_invoices',
-    sourceType: 'paperwork',
-    sourceTitle: 'ECPA Invoice Records (invoices.json)',
-    content: 'Pilot fee £30,000 credited against Year 1. Year 1 invoiced in 4 parts across member forces. All paid.',
-    factStatus: 'verified',
-    recordPath: 'invoices.json',
-  };
-
-  evidenceMap['doc_a_profile'] = {
-    id: 'doc_a_profile',
-    sourceType: 'paperwork',
-    sourceTitle: 'ECPA Account Profile (profile.json)',
-    content: 'Public safety sector. 35 docks across 4 forces. Lead contact: Rhys Calder.',
-    factStatus: 'verified',
-    recordPath: 'profile.json',
-  };
-
-  // Register Account B Records
-  evidenceMap['doc_b_contract'] = {
-    id: 'doc_b_contract',
-    sourceType: 'contract',
-    sourceTitle: 'Aldermoor Signed Order Form (contract.txt)',
-    content: 'Signed 15 Jan 2026 by Stefan Roy. 14 docks at €140,000/yr. Term: 1 Feb 2026 to 31 Jan 2027. Paid.',
-    factStatus: 'verified',
-    recordPath: 'contract.txt',
-  };
-
-  evidenceMap['doc_b_invoices'] = {
-    id: 'doc_b_invoices',
-    sourceType: 'paperwork',
-    sourceTitle: 'Aldermoor Invoice Ledger (invoices.json)',
-    content: 'INV-25-1012 trial fee €12,000 paid. INV-26-0204 first year €128,000 paid to group security.',
-    factStatus: 'verified',
-    recordPath: 'invoices.json',
-  };
-
-  evidenceMap['email_b_finance'] = {
-    id: 'email_b_finance',
-    sourceType: 'email',
-    sourceTitle: 'Group Finance Unsigned Email (emails/2026-10-08_finance_mailbox.txt)',
-    content: 'From Group Finance (shared mailbox): "Before a renewal is raised, please send the quote in a form that shows the cost for each plant." No reply on file.',
-    factStatus: 'told',
-    recordPath: 'emails/2026-10-08_finance_mailbox.txt',
-  };
-
-  evidenceMap['email_b_savings'] = {
-    id: 'email_b_savings',
-    sourceType: 'email',
-    sourceTitle: 'Stefan Roy ROI Claim (emails/2026-07-16_stefan_savings.txt)',
-    content: 'From Stefan Roy: "ROI is proven, about 1.2 million euros a year saved. Thirteen of fifteen plants are flying. [No detail received]"',
-    factStatus: 'claim',
-    saidBy: 'Stefan Roy',
-    recordPath: 'emails/2026-07-16_stefan_savings.txt',
-  };
-
-  evidenceMap['email_b_case_study'] = {
-    id: 'email_b_case_study',
-    sourceType: 'email',
-    sourceTitle: 'Stefan Roy 40-Plant Sister Company Request (emails/2026-09-22_stefan_case_study.txt)',
-    content: 'From Stefan Roy: "I want a case study for our sister company. They have 40 plants and they are watching what we do here. Two pages, headline saving on front."',
-    factStatus: 'told',
-    saidBy: 'Stefan Roy',
-    recordPath: 'emails/2026-09-22_stefan_case_study.txt',
-  };
-
-  evidenceMap['ticket_b_beatriz'] = {
-    id: 'ticket_b_beatriz',
-    sourceType: 'ticket',
-    sourceTitle: 'Beatriz Alonso Alert Routing Ticket FB-10944 (emails/2026-09-18_beatriz_alerts.txt)',
-    content: 'Beatriz Alonso requested alerts for Plant 7 to go to multiple people. Support desk sent standard settings guide and closed ticket without asking why.',
-    factStatus: 'told',
-    saidBy: 'Beatriz Alonso',
-    recordPath: 'emails/2026-09-18_beatriz_alerts.txt',
-  };
+  paperworkB.records?.forEach((r: any) => {
+    const recordContent = r.text || (r.data ? JSON.stringify(r.data, null, 2) : '');
+    const isContractOrInvoice = r.kind === 'contract' || r.kind === 'invoices' || r.kind === 'flights';
+    const isStefanSavings = r.path.includes('stefan_savings');
+    evidenceMap[`B:${r.path}`] = {
+      id: `B:${r.path}`,
+      sourceType: r.kind || 'paperwork',
+      sourceTitle: `Aldermoor: ${r.path}`,
+      content: recordContent,
+      factStatus: isStefanSavings ? 'claim' : isContractOrInvoice ? 'verified' : 'told',
+      recordPath: r.path,
+    };
+    if (['contract.txt', 'invoices.json', 'profile.json'].includes(r.path)) {
+      evidenceMap[`doc_b_${r.path.replace(/\.[^.]+$/, '')}`] = {
+        id: `doc_b_${r.path.replace(/\.[^.]+$/, '')}`,
+        sourceType: r.kind || 'paperwork',
+        sourceTitle: `Aldermoor: ${r.path}`,
+        content: recordContent,
+        factStatus: isContractOrInvoice ? 'verified' : 'told',
+        recordPath: r.path,
+      };
+    }
+    if (r.path === 'emails/2026-10-08_finance_mailbox.txt') {
+      evidenceMap['email_b_finance'] = {
+        id: 'email_b_finance',
+        sourceType: 'email',
+        sourceTitle: 'Group Finance Unsigned Email (emails/2026-10-08_finance_mailbox.txt)',
+        content: recordContent,
+        factStatus: 'told',
+        recordPath: r.path,
+      };
+    }
+    if (r.path === 'emails/2026-07-16_stefan_savings.txt') {
+      evidenceMap['email_b_savings'] = {
+        id: 'email_b_savings',
+        sourceType: 'email',
+        sourceTitle: 'Stefan Roy ROI Claim (emails/2026-07-16_stefan_savings.txt)',
+        content: recordContent,
+        factStatus: 'claim',
+        saidBy: 'Stefan Roy',
+        recordPath: r.path,
+      };
+    }
+    if (r.path === 'emails/2026-09-18_beatriz_alerts.txt') {
+      evidenceMap['ticket_b_beatriz'] = {
+        id: 'ticket_b_beatriz',
+        sourceType: 'email',
+        sourceTitle: 'Beatriz Alonso Alert Routing Request (FB-10944)',
+        content: recordContent,
+        factStatus: 'told',
+        saidBy: 'Beatriz Alonso',
+        recordPath: r.path,
+      };
+    }
+  });
 
   // -------------------------------------------------------------
   // ACCOUNT A: Eastern Counties Police Alliance
@@ -201,33 +243,34 @@ export function loadNormalizedCRMData() {
       supportedValue: 136361,
       unsupportedValue: 213639,
       stage: 'qualified',
-      statusText: 'Qualified — Evidence held; proposal pending delivery to Rhys Calder',
+      statusText: 'Qualified in morning discovery — Blocker open: requires proof of force dock utilization',
       blocker: {
         text: 'Nobody can show which forces actually use the docks',
         status: 'open',
       },
       deadline: {
-        text: 'Existing contract expires 28 February 2027. Early renewal required by December.',
+        text: 'Existing order form term expires 28 February 2027 (contract.txt). No automatic renewal.',
         soon: false,
         passed: false,
+        dueDate: '2027-02-28',
       },
       evidenceIds: ['rc_appetite_0', 'rc_appetite_2', 'km_usage_1', 'km_value_2', 'flight_log_force_month', 'doc_a_contract'],
       evidenceItems: [],
       calculation: {
-        formula: 'Active Operational Utilization Ratio × Baseline Annual Contract Value',
+        formula: 'Morning Discovery Qualified Potential (Opp: a_renewal)',
         inputs: [
-          { label: 'Baseline Contract Value', value: '£350,000/yr', sourceId: 'doc_a_contract', factStatus: 'verified' },
-          { label: 'Active Operational Docks', value: '14 of 18 flying docks (Westmere & Metro Central active; Tarn Valley & Norwold inactive)', sourceId: 'km_usage_1', factStatus: 'verified' },
-          { label: 'Supported Allocation', value: '£136,361 (38.96% active verified force baseline)', sourceId: 'flight_log_force_month', factStatus: 'verified' },
-          { label: 'Unbacked Renewal Portion', value: '£213,639 (unverified idle forces awaiting signoff)', sourceId: 'rc_appetite_2', factStatus: 'told' },
+          { label: 'Baseline Contract Value', value: '£350,000/yr (35 docks)', sourceId: 'doc_a_contract', factStatus: 'verified' },
+          { label: 'Morning Discovery Qualified Value', value: '£136,361 (Qualified stage estimate)', sourceId: 'a_renewal', factStatus: 'told' },
+          { label: 'Operational Activity Proof', value: '14 of 18 docks active in Westmere; Tarn Valley/Norwold inactive', sourceId: 'km_usage_1', factStatus: 'verified' },
+          { label: 'Remaining Unbacked Pipeline', value: '£213,639 (Subject to inactive force renewal)', sourceId: 'rc_appetite_2', factStatus: 'told' },
         ],
-        explanation: 'Of the 35 docks under contract, 14 docks are operationally flying in Westmere and Metro Central as verified by flight logs. The £136,361 value is strictly supported by active force usage proof, while £213,639 remains unbacked until inactive forces resolve blockers.',
+        explanation: 'Annual contract value is £350,000 (signed contract.txt). £136,361 was qualified during the morning discovery based on active force interest. Operational flight logs in flight_log_force_month.csv prove dock usage in Westmere and Metro Central to clear Rhys Calder’s blocker, but flight counts do not calculate commercial contract value.',
       },
       stakeholders: [
-        { personId: 'rhys_calder', role: 'champion', details: 'Alliance drone programme lead; owns the contract renewal relationship' },
-        { personId: 'hannah_doyle', role: 'blocker', details: 'Procurement lead; requires compliant force usage justification' },
+        { personId: 'rhys_calder', role: 'champion', details: 'Alliance drone programme lead; owns renewal proposal presentation' },
+        { personId: 'hannah_doyle', role: 'blocker', details: 'Alliance procurement lead; sets call-off conditions' },
       ],
-      whatMovesIt: 'Send Rhys Calder a proposal with exactly flight_log_force_month and km_usage_1.',
+      whatMovesIt: 'Send Rhys Calder a proposal with flight_log_force_month.csv and km_usage_1.',
     },
     {
       id: 'a_tarn',
@@ -238,7 +281,7 @@ export function loadNormalizedCRMData() {
       supportedValue: 142302,
       unsupportedValue: 57698,
       stage: 'cleared',
-      statusText: 'Blocker cleared — Ready for agreement meeting with Fatima Osei & Rhys Calder',
+      statusText: 'Blocker cleared internally — Ready for agreement meeting with Fatima Osei & Rhys Calder',
       blocker: {
         text: 'The DPIA cannot be signed without the data-flow documents FlytBase never sent',
         status: 'cleared',
@@ -252,17 +295,17 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_2', 'km_others_2', 'fo_dpia_2', 'fo_needs_3', 'pj_ticket', 'srv_dataflow', 'support_ticket_history', 'dataflow_pack'],
       evidenceItems: [],
       calculation: {
-        formula: 'Cleared Force Expansion Value (Tarn Valley & Norwold rollout)',
+        formula: 'Morning Discovery Qualified Potential (Opp: a_tarn)',
         inputs: [
-          { label: 'Nominal Value Potential', value: '£200,000', sourceId: 'rc_appetite_2', factStatus: 'told' },
-          { label: 'Supported Qualified Base', value: '£142,302', sourceId: 'srv_dataflow', factStatus: 'verified' },
-          { label: 'Contingent Launch Reserve', value: '£57,698', sourceId: 'fo_needs_3', factStatus: 'told' },
+          { label: 'Nominal Opportunity Cap', value: '£200,000 (worth_up_to)', sourceId: 'a_tarn', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£142,302 (Blocker cleared stage)', sourceId: 'a_tarn', factStatus: 'told' },
+          { label: 'Blocker Clearance Proof', value: 'Dataflow pack produced by Engineering', sourceId: 'srv_dataflow', factStatus: 'verified' },
         ],
-        explanation: 'SRV (Director of Engineering) confirmed the data-flow security pack can be delivered in one week. Fatima Osei confirmed completion within 3 weeks upon receipt, unlocking Tarn Valley and allowing Norwold to mirror the DPIA.',
+        explanation: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412).',
       },
       stakeholders: [
-        { personId: 'fatima_osei', role: 'blocker', details: 'DPO at Tarn Valley; needs data flows, retention periods and video storage specs' },
-        { personId: 'rhys_calder', role: 'decision_maker', details: 'Programme lead co-authorizing the multi-force operational rollout' },
+        { personId: 'fatima_osei', role: 'blocker', details: 'Data protection officer at Tarn Valley; needs data-flow pack to sign DPIA' },
+        { personId: 'rhys_calder', role: 'decision_maker', details: 'Programme lead co-authorizing multi-force deployment' },
       ],
       whatMovesIt: 'Meet with Fatima Osei, Rhys Calder and agree it.',
     },
@@ -275,13 +318,13 @@ export function loadNormalizedCRMData() {
       supportedValue: 93217,
       unsupportedValue: 156783,
       stage: 'qualified',
-      statusText: 'Qualified — Autumn finance window closing; helicopter benchmark verified',
+      statusText: 'Qualified in morning discovery — Blocker: cost per flight vs helicopter hours required',
       blocker: {
         text: 'No cost per flight against helicopter hours',
         status: 'open',
       },
       deadline: {
-        text: "Metro Central's finance bid window closes. Ewan can only bid for more docks if blocker cleared.",
+        text: "Morning snapshot: 8 moves remaining at handover; Metro Central autumn finance bid window closing.",
         soon: true,
         passed: false,
         movesLeft: 8,
@@ -289,19 +332,19 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['km_staff_2', 'km_value_2', 'eb_heli_1', 'eb_drone_2', 'eb_sign_2', 'helicopter_cost_overtime', 'flight_log_force_month'],
       evidenceItems: [],
       calculation: {
-        formula: 'Helicopter Cost Savings Model vs Additional Drone Operating Shifts',
+        formula: 'Morning Discovery Qualified Potential (Opp: a_westmere)',
         inputs: [
-          { label: 'Helicopter Benchmark Cost', value: '£1,500/flight hour all-in', sourceId: 'eb_heli_1', factStatus: 'verified' },
-          { label: 'Supported Scale Allocation', value: '£93,217', sourceId: 'helicopter_cost_overtime', factStatus: 'verified' },
-          { label: 'Unapproved Stadium Bid Reserve', value: '£156,783', sourceId: 'kb_stadium_view', factStatus: 'told' },
+          { label: 'Nominal Opportunity Cap', value: '£250,000 (worth_up_to)', sourceId: 'a_westmere', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£93,217 (Qualified stage estimate)', sourceId: 'a_westmere', factStatus: 'told' },
+          { label: 'Helicopter Cost Benchmark', value: '£1,500/hr all-in benchmark', sourceId: 'eb_heli_1', factStatus: 'verified' },
         ],
-        explanation: 'Ewan Brooks verified that the Chief Finance Officer requires a cost per flight against £1,500/hr helicopter benchmark. £93,217 represents the immediate evidenced tranche, while £156,783 rests on unapproved stadium staffing.',
+        explanation: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round.',
       },
       stakeholders: [
         { personId: 'ewan_brooks', role: 'payer', details: 'Finance business partner; owns finance bid into autumn round' },
         { personId: 'karen_mbeki', role: 'user', details: 'Drone unit inspector; needs 9 more trained operators for 30 docks' },
       ],
-      whatMovesIt: 'Send Ewan Brooks a proposal with helicopter_cost_overtime, flight_log_force_month, km_staff_2.',
+      whatMovesIt: 'Send Ewan Brooks a proposal with helicopter_cost_overtime.csv, flight_log_force_month.csv, km_staff_2.',
     },
     {
       id: 'a_tender',
@@ -312,44 +355,40 @@ export function loadNormalizedCRMData() {
       supportedValue: 359560,
       unsupportedValue: 1140440,
       stage: 'qualified',
-      statusText: 'Qualified — Tender spec locking; needs costed operating model with Hannah Doyle',
+      statusText: 'Qualified in morning discovery — Blocker: specification has no costed operating model',
       blocker: {
         text: 'The specification has no costed operating model',
         status: 'open',
       },
       deadline: {
-        text: 'The tender specification locks. Whatever is not in it by then is out.',
+        text: 'Tender specification is being finalised by alliance procurement.',
         soon: false,
         passed: false,
       },
       evidenceIds: ['rc_tender_2', 'hd_calloff_2', 'rc_funding_2', 'eb_sign_2', 'km_staff_2'],
       evidenceItems: [],
       calculation: {
-        formula: 'Preliminary Framework Baseline Positioning (Initial Phase Tranche)',
+        formula: 'Morning Discovery Qualified Potential (Opp: a_tender)',
         inputs: [
-          { label: 'Total 300-Dock Framework Scope', value: '£1,500,000 max potential', sourceId: 'rc_tender_0', factStatus: 'told' },
-          { label: 'Supported Position Tranche', value: '£359,560 backed by 4-force operating data', sourceId: 'hd_calloff_2', factStatus: 'told' },
-          { label: 'Unfunded Speculative Framework', value: '£1,140,440 unbacked tender ambition', sourceId: 'rc_funding_2', factStatus: 'told' },
+          { label: 'Nominal Framework Ambition', value: '£1,500,000 (worth_up_to)', sourceId: 'a_tender', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£359,560 (Qualified base position)', sourceId: 'a_tender', factStatus: 'told' },
+          { label: 'Multi-Force Funding Reality', value: 'No pooled budget; each force must fund call-offs', sourceId: 'rc_funding_2', factStatus: 'told' },
         ],
-        explanation: 'Rhys Calder stated the alliance has no pooled budget; each member force funds call-offs independently. £359,560 is the substantiated base model for forces with committed interest, while £1,140,440 is speculative tender volume.',
+        explanation: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2).',
       },
       stakeholders: [
         { personId: 'hannah_doyle', role: 'blocker', details: 'Alliance procurement lead; sets framework tender specifications' },
-        { personId: 'rhys_calder', role: 'champion', details: 'Drafting framework scope with regional leadership' },
+        { personId: 'rhys_calder', role: 'champion', details: 'Regional framework sponsor' },
       ],
       whatMovesIt: 'Send Hannah Doyle a proposal with draft_tender_spec, clarification_template, km_staff_2.',
     },
   ];
 
-  // Assign evidence items to deals
+  // Attach real evidence items to deals
   dealsA.forEach((d) => {
-    d.evidenceItems = d.evidenceIds.map((id) => evidenceMap[id] || {
-      id,
-      sourceType: 'paperwork',
-      sourceTitle: id,
-      content: 'Source record referenced in deal audit trail.',
-      factStatus: 'told',
-    });
+    d.evidenceItems = d.evidenceIds
+      .map((id) => evidenceMap[id])
+      .filter((e): e is EvidenceReference => Boolean(e));
   });
 
   const stakeholdersA: Stakeholder[] = [
@@ -372,7 +411,7 @@ export function loadNormalizedCRMData() {
       associatedDealIds: ['a_renewal', 'a_tarn', 'a_tender'],
       evidenceIds: ['rc_appetite_0', 'rc_appetite_2', 'rc_funding_2', 'rc_tender_2'],
       sourceRecords: ['profile.json', 'contract.txt', 'calls/2026-10-20_check_in.txt'],
-      notes: 'Strong alliance champion. However, cannot commit individual force budgets directly.',
+      notes: 'Strong alliance champion. Co-decider, but cannot approve spending for individual forces.',
     },
     {
       id: 'karen_mbeki',
@@ -409,12 +448,12 @@ export function loadNormalizedCRMData() {
       technicalBlockerStatus: false,
       procurementBlockerStatus: true, // Compliance / DPIA blocker
       championStatus: false,
-      lastInteraction: '2026-11-14 (Morning meeting)',
+      lastInteraction: '2026-11-14 (Morning discovery)',
       needsBeforeProgressing: 'Data-flow documentation pack, video retention policy, and storage access controls.',
       associatedDealIds: ['a_tarn'],
       evidenceIds: ['fo_dpia_0', 'fo_dpia_2', 'fo_needs_3', 'pj_ticket'],
       sourceRecords: ['tickets.json', 'dataflow_pack.csv'],
-      notes: 'Critical compliance gate. Ticket sat unassigned for 4 months. Can sign DPIA in 3 weeks once pack delivered.',
+      notes: 'Compliance gatekeeper. Support ticket sat unassigned for 4 months. Can sign DPIA in 3 weeks once pack delivered.',
     },
     {
       id: 'hannah_doyle',
@@ -430,12 +469,12 @@ export function loadNormalizedCRMData() {
       technicalBlockerStatus: false,
       procurementBlockerStatus: true,
       championStatus: false,
-      lastInteraction: '2026-11-14 (Morning meeting)',
+      lastInteraction: '2026-11-14 (Morning discovery)',
       needsBeforeProgressing: 'Costed operating model, draft tender specification, and clarification template.',
       associatedDealIds: ['a_tender', 'a_renewal'],
       evidenceIds: ['hd_calloff_2', 'rc_tender_2'],
       sourceRecords: ['calls/2025-12-16_pilot_review.txt'],
-      notes: 'Neutral gatekeeper for framework procurement. Requires compliant call-off mechanism.',
+      notes: 'Neutral procurement gatekeeper. Decision role confirmation required.',
     },
     {
       id: 'ewan_brooks',
@@ -451,12 +490,12 @@ export function loadNormalizedCRMData() {
       technicalBlockerStatus: false,
       procurementBlockerStatus: false,
       championStatus: false,
-      lastInteraction: '2026-11-14 (Morning meeting)',
+      lastInteraction: '2026-11-14 (Morning discovery)',
       needsBeforeProgressing: 'Cost per flight comparison against £1,500/hr helicopter benchmark before finance window closes.',
       associatedDealIds: ['a_westmere', 'a_tender'],
       evidenceIds: ['eb_heli_1', 'eb_drone_2', 'eb_sign_2', 'eb_window_2'],
       sourceRecords: ['files/helicopter_cost_overtime.csv'],
-      notes: 'Key budget holder for Metro Central force. Has 8 moves left before autumn finance round closes.',
+      notes: 'Key budget holder for Metro Central force. Autumn finance bid window closing.',
     },
   ];
 
@@ -468,7 +507,7 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 28, deadlineUrgency: 23, blockerClearance: 25, evidenceReadiness: 19 },
       title: 'Deliver Data-Flow Pack to Fatima Osei (DPO) and Rhys Calder to Agree Tarn Valley Go-Live',
       description: 'Hand over the verified engineering data-flow pack (retention, storage, access controls) to DPO Fatima Osei and convene an agreement meeting with Rhys Calder to clear the final operational signoff.',
-      responsibleOwner: 'CSM (You) with SRV (Engineering)',
+      responsibleOwner: 'CSM with SRV (Engineering)',
       dueDate: '2026-11-18',
       accountId: 'A',
       relatedDealId: 'a_tarn',
@@ -476,7 +515,7 @@ export function loadNormalizedCRMData() {
       reasonForPrioritization: 'Highest immediate yield: blocker is cleared internally, Fatima has committed to a 3-week completion timeline, and Norwold will mirror the approval.',
       evidenceIds: ['srv_dataflow', 'fo_needs_3', 'pj_ticket'],
       expectedOutcome: 'DPIA signoff secured for Tarn Valley, clearing £142,302 to move to agreed stage.',
-      dependency: 'SRV engineering dataflow documentation pack.',
+      dependency: 'Delivery of dataflow_pack.txt prepared by Engineering.',
       status: 'pending',
     },
     {
@@ -486,7 +525,7 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 27, deadlineUrgency: 20, blockerClearance: 23, evidenceReadiness: 20 },
       title: 'Send Rhys Calder the Renewal Proposal Backed by 14-Dock Active Flight Logs',
       description: 'Present commercial renewal proposal for 35 docks to Rhys Calder, including the flight log evidence proving 14 active docks flying in Westmere and Metro Central.',
-      responsibleOwner: 'CSM (You)',
+      responsibleOwner: 'CSM',
       dueDate: '2026-11-20',
       accountId: 'A',
       relatedDealId: 'a_renewal',
@@ -494,7 +533,7 @@ export function loadNormalizedCRMData() {
       reasonForPrioritization: 'Directly moves the core £136,361 renewal forward with verified evidence, preventing end-of-year contract slippage.',
       evidenceIds: ['km_usage_1', 'flight_log_force_month', 'doc_a_contract'],
       expectedOutcome: 'Rhys Calder advances proposal to member force finance leads for Year 2 renewal.',
-      dependency: 'Compilation of flight_log_force_month and km_usage_1 stats.',
+      dependency: 'Compilation of flight_log_force_month.csv stats.',
       status: 'pending',
     },
     {
@@ -504,12 +543,12 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 24, deadlineUrgency: 25, blockerClearance: 20, evidenceReadiness: 19 },
       title: 'Submit Helicopter Cost-Comparison & Shift Model to Ewan Brooks Before Autumn Window Closes',
       description: 'Deliver the £1,500/hr helicopter benchmark comparison against drone flight costs with Karen Mbeki’s overtime shift model to Ewan Brooks for Metro Central’s finance bid.',
-      responsibleOwner: 'CSM (You) with Ewan Brooks',
+      responsibleOwner: 'CSM with Ewan Brooks',
       dueDate: '2026-11-22',
       accountId: 'A',
       relatedDealId: 'a_westmere',
       relevantStakeholderId: 'ewan_brooks',
-      reasonForPrioritization: 'Time-critical deadline: Metro Central autumn finance bid window closes in 8 moves. Missed window means missing the FY27 capital cycle.',
+      reasonForPrioritization: 'Time-critical deadline: Metro Central autumn finance bid window closes soon. Missed window means missing the FY27 capital cycle.',
       evidenceIds: ['eb_heli_1', 'eb_sign_2', 'helicopter_cost_overtime', 'km_staff_2'],
       expectedOutcome: 'CFO approves call-off inclusion in Metro Central autumn finance budget.',
       dependency: 'Final validation of helicopter cost per flight table.',
@@ -522,12 +561,12 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 30, deadlineUrgency: 12, blockerClearance: 15, evidenceReadiness: 18 },
       title: 'Draft Costed Operating Model for 300-Dock Framework Tender with Hannah Doyle',
       description: 'Engage procurement lead Hannah Doyle with draft tender specifications and multi-force staffing templates to ensure FlytBase architecture is included in the framework tender.',
-      responsibleOwner: 'CSM (You) with Achal Negi (BD)',
+      responsibleOwner: 'CSM with Achal Negi (BD)',
       dueDate: '2026-12-05',
       accountId: 'A',
       relatedDealId: 'a_tender',
       relevantStakeholderId: 'hannah_doyle',
-      reasonForPrioritization: 'Strategic long-term deal (£359,560 supported, £1.5M max); specification locking in Q1.',
+      reasonForPrioritization: 'Strategic long-term deal (£359,560 supported base, £1.5M max); specification locking in Q1.',
       evidenceIds: ['hd_calloff_2', 'rc_tender_2', 'km_staff_2'],
       expectedOutcome: 'Tender specification incorporates FlytBase costed operational requirements.',
       dependency: 'Procurement alignment on multi-force call-off structure.',
@@ -539,15 +578,15 @@ export function loadNormalizedCRMData() {
     {
       id: 'risk_a_1',
       riskId: 'RISK-A-DEADLINE-METRO',
-      title: 'Metro Central Autumn Finance Window Closing (8 Moves Left)',
+      title: 'Metro Central Autumn Finance Window Closing (Morning Snapshot: 8 Moves Left)',
       accountId: 'A',
       relatedDealId: 'a_westmere',
       severity: 'critical',
-      probability: 'High (8 moves remaining)',
+      probability: 'High operational exposure (Autumn finance cutoff approaching)',
       whyItMatters: 'Metro Central only bids in autumn. If Ewan Brooks does not submit the helicopter comparison to his CFO before the window shuts, the £93,217 expansion cannot be funded until next year.',
-      triggerOrDeadline: 'Autumn Finance Window Cutoff (Moves left: 8)',
-      recommendedMitigation: 'Send helicopter_cost_overtime and shift overtime analysis to Ewan Brooks immediately.',
-      responsibleOwner: 'CSM (You)',
+      triggerOrDeadline: 'Autumn Finance Window Cutoff (Morning snapshot: 8 moves remaining)',
+      recommendedMitigation: 'Send helicopter_cost_overtime.csv and shift overtime analysis to Ewan Brooks immediately.',
+      responsibleOwner: 'CSM',
       evidenceIds: ['eb_window_2', 'eb_sign_2', 'helicopter_cost_overtime'],
       sourceRecords: ['files/helicopter_cost_overtime.csv'],
       statusColor: 'red',
@@ -559,8 +598,8 @@ export function loadNormalizedCRMData() {
       accountId: 'A',
       relatedDealId: 'a_tender',
       severity: 'high',
-      probability: 'Medium',
-      whyItMatters: 'Tender specification is being finalised. If it locks without FlytBase-compatible operating specifications, the £1.5M framework opportunity is lost to competing models.',
+      probability: 'Insufficient statistical history to calculate probability',
+      whyItMatters: 'Tender specification is being finalised. If it locks without FlytBase-compatible operating specifications, the framework opportunity is lost to competing models.',
       triggerOrDeadline: 'Regional Tender Spec Finalisation',
       recommendedMitigation: 'Supply Hannah Doyle with clarification template and force operating cost breakdown.',
       responsibleOwner: 'Achal Negi / CSM',
@@ -575,11 +614,11 @@ export function loadNormalizedCRMData() {
       accountId: 'A',
       relatedDealId: 'a_tarn',
       severity: 'medium',
-      probability: 'Known historical stall (4 months unresolved)',
+      probability: 'Documented 4-month historical stall (FB-10412)',
       whyItMatters: 'The support ticket sat unassigned for four months. Norwold Chief Constable is already cautious from a local privacy row and waiting to copy Tarn Valley’s DPIA.',
       triggerOrDeadline: '3-week review cycle upon delivery of data-flow pack',
-      recommendedMitigation: 'Direct CSM handover of data-flow pack to Fatima Osei; close support ticket FB-10822.',
-      responsibleOwner: 'CSM (You)',
+      recommendedMitigation: 'Direct CSM handover of data-flow pack to Fatima Osei; close support ticket FB-10412.',
+      responsibleOwner: 'CSM',
       evidenceIds: ['pj_ticket', 'fo_dpia_2', 'km_others_2'],
       sourceRecords: ['tickets.json', 'dataflow_pack.csv'],
       statusColor: 'amber',
@@ -598,7 +637,7 @@ export function loadNormalizedCRMData() {
       priority: 'high',
       blocksDealProgression: false,
       category: 'operational',
-      evidenceIds: ['doc_a_profile', 'internal_notes.json'],
+      evidenceIds: ['doc_a_profile', 'doc_a_internal_notes'],
       status: 'not_found_in_records',
     },
     {
@@ -606,7 +645,7 @@ export function loadNormalizedCRMData() {
       title: 'Norwold Chief Constable Specific Privacy Mandates',
       accountId: 'A',
       relatedDealId: 'a_tarn',
-      whyItMatters: 'Norwold has not flown live missions due to caution following a local privacy row. We do not know if their requirements exceed Tarn Valley’s DPIA.',
+      whyItMatters: 'Norwold has not flown live missions due to caution following a local privacy row. We do not know if their requirements exceed Tarn Valley’s DPIA standard.',
       whoCanFill: 'Norwold Drone Lead or Fatima Osei',
       recommendedQuestion: 'Does Norwold require any force-specific retention clauses beyond Tarn Valley’s DPIA standard?',
       priority: 'high',
@@ -644,13 +683,13 @@ export function loadNormalizedCRMData() {
       supportedValue: 140000,
       unsupportedValue: 0,
       stage: 'identified',
-      statusText: 'Contract baseline verified (€140k/yr); Renewal halted by unanswered Finance email',
+      statusText: 'Signed contract baseline verified (€140k/yr) — Renewal halted by unanswered Finance email',
       blocker: {
         text: 'Group Finance halted renewal pending plant-by-plant quote breakdown; email was left unanswered',
         status: 'open',
       },
       deadline: {
-        text: 'Order term ends 31 January 2027. No automatic renewal. New order required before then.',
+        text: 'Order term ends 31 January 2027 (contract.txt). No automatic renewal.',
         soon: true,
         passed: false,
         dueDate: '2027-01-31',
@@ -682,18 +721,18 @@ export function loadNormalizedCRMData() {
       supportedValue: 0,
       unsupportedValue: 160000,
       stage: 'unqualified',
-      statusText: 'Unbacked offer — Docks for Plant 15 and two idle plants; not yet qualified with customer',
+      statusText: 'Unaccepted offer — Docks for Plant 15 and two idle plants; not qualified with customer',
       blocker: {
         text: 'Never discussed during commercial handover; no plant managers engaged beyond Plant 7',
         status: 'open',
       },
       deadline: null,
-      evidenceIds: ['offer_b_more_plants', 'doc_b_profile'],
+      evidenceIds: ['doc_b_profile'],
       evidenceItems: [],
       calculation: {
-        formula: 'Pitched Offer Value (Unaccepted Pitch)',
+        formula: 'Unaccepted Internal Offer Pitch (€160,000 nominal)',
         inputs: [
-          { label: 'Offer b_more_plants', value: '€160,000 (Plant 15 & 2 idle plants)', sourceId: 'offer_b_more_plants', factStatus: 'claim' },
+          { label: 'Internal Offer Value', value: '€160,000 (Plant 15 & 2 idle plants)', sourceId: 'b_more_plants', factStatus: 'claim' },
           { label: 'Verified Commercial Commitment', value: '€0 (No signed order or qualified budget)', sourceId: 'doc_b_profile', factStatus: 'unknown' },
         ],
         explanation: 'Offer was drafted internally for Stefan Roy but never qualified or agreed. Counted as €0 supported pipeline to preserve financial integrity.',
@@ -742,13 +781,13 @@ export function loadNormalizedCRMData() {
       supportedValue: 0,
       unsupportedValue: 1200000,
       stage: 'unqualified',
-      statusText: 'Unsupported claim — Stefan Roy claimed €1.2M savings; no evidence provided',
+      statusText: 'Customer claim — Stefan Roy claimed €1.2M savings; no evidence provided ([No detail received])',
       blocker: {
         text: 'Stefan Roy provided zero supporting data for the €1.2M savings claim',
         status: 'open',
       },
       deadline: null,
-      evidenceIds: ['email_b_savings', 'email_b_case_study'],
+      evidenceIds: ['email_b_savings', 'B:emails/2026-09-22_stefan_case_study.txt'],
       evidenceItems: [],
       calculation: {
         formula: 'Customer Claim (Unbacked)',
@@ -756,7 +795,7 @@ export function loadNormalizedCRMData() {
           { label: 'Stefan Roy Email Statement', value: '€1,200,000 / year savings claimed', sourceId: 'email_b_savings', factStatus: 'claim' },
           { label: 'Verified Supporting Calculations', value: '€0 (Record states: [No detail received])', sourceId: 'email_b_savings', factStatus: 'claim' },
         ],
-        explanation: 'Stefan Roy emailed FlytBase stating ROI is proven at ~€1.2M/yr across plants, but promised details were never sent. Displayed strictly as unsupported claim.',
+        explanation: 'Stefan Roy emailed FlytBase stating ROI is proven at ~€1.2M/yr across plants, but promised details were never sent ([No detail received]). Displayed strictly as a customer claim (Fact status: CLAIM), NOT verified revenue or savings.',
       },
       stakeholders: [
         { personId: 'stefan_roy', role: 'champion', details: 'Pushed for 2-page case study featuring the headline number' },
@@ -781,9 +820,9 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['ticket_b_beatriz'],
       evidenceItems: [],
       calculation: {
-        formula: 'Pitched Offer Value (Unaccepted Pitch)',
+        formula: 'Unaccepted Internal Offer Pitch (€50,000 nominal)',
         inputs: [
-          { label: 'Internal Offer Value', value: '€50,000', sourceId: 'offer_b_priority_support', factStatus: 'claim' },
+          { label: 'Internal Offer Value', value: '€50,000', sourceId: 'b_priority_support', factStatus: 'claim' },
           { label: 'Customer Commitment', value: '€0', sourceId: 'ticket_b_beatriz', factStatus: 'told' },
         ],
         explanation: 'Beatriz Alonso asked about night alert routing. Customer success closed the ticket with a PDF without exploring operational support packages.',
@@ -796,13 +835,9 @@ export function loadNormalizedCRMData() {
   ];
 
   dealsB.forEach((d) => {
-    d.evidenceItems = d.evidenceIds.map((id) => evidenceMap[id] || {
-      id,
-      sourceType: 'paperwork',
-      sourceTitle: id,
-      content: 'Source record referenced in deal audit trail.',
-      factStatus: 'told',
-    });
+    d.evidenceItems = d.evidenceIds
+      .map((id) => evidenceMap[id])
+      .filter((e): e is EvidenceReference => Boolean(e));
   });
 
   const stakeholdersB: Stakeholder[] = [
@@ -823,7 +858,7 @@ export function loadNormalizedCRMData() {
       lastInteraction: '2026-10-13 (Check-in call)',
       needsBeforeProgressing: 'A 2-page case study demonstrating savings to share with 40-plant sister company.',
       associatedDealIds: ['b_renewal', 'b_idle_plants', 'b_sister_company'],
-      evidenceIds: ['doc_b_contract', 'email_b_savings', 'email_b_case_study'],
+      evidenceIds: ['doc_b_contract', 'email_b_savings', 'B:emails/2026-09-22_stefan_case_study.txt'],
       sourceRecords: ['profile.json', 'contract.txt', 'calls/2026-10-13_check_in.txt'],
       notes: 'Sole contact for entire account. Single point of failure risk. Claimed €1.2M ROI without data.',
     },
@@ -846,7 +881,7 @@ export function loadNormalizedCRMData() {
       associatedDealIds: ['b_priority_support', 'b_idle_plants'],
       evidenceIds: ['ticket_b_beatriz'],
       sourceRecords: ['emails/2026-09-18_beatriz_alerts.txt', 'tickets.json'],
-      notes: 'Guarded relationship. Only contact on file through support ticket FB-10944. Never had a call with FlytBase.',
+      notes: 'Guarded relationship. On file only through support ticket FB-10944. Never had a call with FlytBase.',
     },
     {
       id: 'nadia_rahman',
@@ -921,7 +956,7 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 28, deadlineUrgency: 25, blockerClearance: 25, evidenceReadiness: 18 },
       title: 'Respond to Group Finance Mailbox with Plant-by-Plant Renewal Breakdown',
       description: 'Reply to the unanswered 8 October 2026 email from Group Finance providing a transparent breakdown of the €140,000 annual contract (€10,000 per plant across 14 docks) to clear the renewal gate.',
-      responsibleOwner: 'CSM (You)',
+      responsibleOwner: 'CSM',
       dueDate: '2026-11-17',
       accountId: 'B',
       relatedDealId: 'b_renewal',
@@ -939,13 +974,13 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 25, deadlineUrgency: 22, blockerClearance: 22, evidenceReadiness: 20 },
       title: 'Schedule Joint Discovery Call with Stefan Roy and Nadia Rahman (Group Finance)',
       description: 'Break single-point-of-contact dependence by connecting Stefan Roy and Nadia Rahman in a joint account review to align security operational goals with corporate financial requirements.',
-      responsibleOwner: 'CSM (You) / Account Lead',
-      dueDate: '2026-11-20',
+      responsibleOwner: 'CSM / Account Lead',
+      dueDate: '2026-11-21',
       accountId: 'B',
       relatedDealId: 'b_renewal',
       relevantStakeholderId: 'stefan_roy',
-      reasonForPrioritization: 'Eliminates single stakeholder vulnerability; ensures finance controller understands the ROI model.',
-      evidenceIds: ['doc_b_profile', 'calls/2026-10-13_check_in.txt'],
+      reasonForPrioritization: 'Eliminates single stakeholder vulnerability; ensures finance controller understands the commercial model.',
+      evidenceIds: ['doc_b_profile', 'B:calls/2026-10-13_check_in.txt'],
       expectedOutcome: 'Direct engagement established with financial budget owner.',
       dependency: 'Response from Group Finance email.',
       status: 'pending',
@@ -957,7 +992,7 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 22, deadlineUrgency: 18, blockerClearance: 22, evidenceReadiness: 20 },
       title: 'Conduct Field Adoption Review with Beatriz Alonso (Plant 7 Manager)',
       description: 'Follow up on ticket FB-10944 regarding night alert routing. Review Plant 7 operational usage, multi-user notification needs, and present tailored priority response support.',
-      responsibleOwner: 'CSM (You)',
+      responsibleOwner: 'CSM',
       dueDate: '2026-11-24',
       accountId: 'B',
       relatedDealId: 'b_priority_support',
@@ -975,13 +1010,13 @@ export function loadNormalizedCRMData() {
       scoringFactors: { dealValueWeight: 30, deadlineUrgency: 10, blockerClearance: 12, evidenceReadiness: 18 },
       title: 'Validate Stefan Roy’s €1.2M Savings Claim for Sister Company Case Study',
       description: 'Audit guard patrol log savings with plant accountants to substantiate Stefan Roy’s €1.2M ROI claim before publishing the 2-page case study for the 40-plant sister company.',
-      responsibleOwner: 'CSM (You) with Stefan Roy',
+      responsibleOwner: 'CSM with Stefan Roy',
       dueDate: '2026-12-08',
       accountId: 'B',
       relatedDealId: 'b_sister_company',
       relevantStakeholderId: 'stefan_roy',
       reasonForPrioritization: 'Protects commercial credibility; creates evidence-backed springboard into 40-plant sister enterprise.',
-      evidenceIds: ['email_b_savings', 'email_b_case_study'],
+      evidenceIds: ['email_b_savings', 'B:emails/2026-09-22_stefan_case_study.txt'],
       expectedOutcome: 'Audited financial proof created for sister company expansion proposal.',
       dependency: 'Actual incident and patrol cost reduction metrics from plants.',
       status: 'pending',
@@ -996,11 +1031,11 @@ export function loadNormalizedCRMData() {
       accountId: 'B',
       relatedDealId: 'b_renewal',
       severity: 'critical',
-      probability: 'Critical (Active Blocker)',
+      probability: 'Critical active blocker (Unreplied renewal query)',
       whyItMatters: 'Group Finance email sent 8 October 2026 remains unanswered in customer records. Contract has NO automatic renewal and expires on 31 January 2027.',
       triggerOrDeadline: 'Contract Term Expiration (2027-01-31)',
       recommendedMitigation: 'Send detailed plant-by-plant quote breakdown immediately.',
-      responsibleOwner: 'CSM (You)',
+      responsibleOwner: 'CSM',
       evidenceIds: ['email_b_finance', 'doc_b_contract'],
       sourceRecords: ['emails/2026-10-08_finance_mailbox.txt'],
       statusColor: 'red',
@@ -1015,7 +1050,7 @@ export function loadNormalizedCRMData() {
       whyItMatters: 'Every call since May 2026 has been with Stefan Roy alone. Finance, IT, and plant managers were never engaged by FlytBase.',
       triggerOrDeadline: 'Annual Renewal & Multi-Site Rollout',
       recommendedMitigation: 'Map and engage Nadia Rahman (Finance), Owen Fitch (IT), and Julian Tate (Risk).',
-      responsibleOwner: 'CSM (You)',
+      responsibleOwner: 'CSM',
       evidenceIds: ['doc_b_profile'],
       sourceRecords: ['profile.json'],
       statusColor: 'amber',
@@ -1027,12 +1062,12 @@ export function loadNormalizedCRMData() {
       accountId: 'B',
       relatedDealId: 'b_sister_company',
       severity: 'medium',
-      probability: 'High risk of audit failure',
-      whyItMatters: 'Stefan Roy wants to pitch the €1.2M savings figure to the 40-plant sister company, but provided no underlying calculation or data.',
+      probability: 'High risk of audit failure upon board review',
+      whyItMatters: 'Stefan Roy wants to pitch the €1.2M savings figure to the 40-plant sister company, but provided no underlying calculation or data ([No detail received]).',
       triggerOrDeadline: 'Sister Company Executive Review',
       recommendedMitigation: 'Politely gate case study release until underlying plant cost reductions are audited.',
-      responsibleOwner: 'CSM (You)',
-      evidenceIds: ['email_b_savings', 'email_b_case_study'],
+      responsibleOwner: 'CSM',
+      evidenceIds: ['email_b_savings', 'B:emails/2026-09-22_stefan_case_study.txt'],
       sourceRecords: ['emails/2026-07-16_stefan_savings.txt'],
       statusColor: 'amber',
     },
@@ -1064,7 +1099,7 @@ export function loadNormalizedCRMData() {
       priority: 'high',
       blocksDealProgression: false,
       category: 'operational',
-      evidenceIds: ['doc_b_profile', 'internal_notes.json'],
+      evidenceIds: ['doc_b_profile', 'B:internal_notes.json'],
       status: 'not_found_in_records',
     },
     {
@@ -1097,7 +1132,7 @@ export function loadNormalizedCRMData() {
     },
   ];
 
-  // Extract raw paperwork records for Evidence Explorer
+  // Extract real paperwork records for Evidence Explorer
   const evidenceExplorerRecords: EvidenceRecord[] = [];
 
   paperworkA.records?.forEach((r: any) => {
@@ -1106,7 +1141,7 @@ export function loadNormalizedCRMData() {
       kind: r.kind || 'record',
       account: 'Eastern Counties Police Alliance (A)',
       summary: `${r.kind ? r.kind.toUpperCase() : 'DOCUMENT'}: ${r.path}`,
-      content: r.text || JSON.stringify(r.data || r, null, 2),
+      content: r.text || (r.data ? JSON.stringify(r.data, null, 2) : ''),
     });
   });
 
@@ -1116,7 +1151,7 @@ export function loadNormalizedCRMData() {
       kind: r.kind || 'record',
       account: 'Aldermoor Industrial Group (B)',
       summary: `${r.kind ? r.kind.toUpperCase() : 'DOCUMENT'}: ${r.path}`,
-      content: r.text || JSON.stringify(r.data || r, null, 2),
+      content: r.text || (r.data ? JSON.stringify(r.data, null, 2) : ''),
     });
   });
 
@@ -1126,6 +1161,8 @@ export function loadNormalizedCRMData() {
     officialStory: 'Rollout under way. 4 forces, 35 docks, 300-dock framework tender in preparation.',
     sector: 'Public Safety & Law Enforcement',
     currency: 'GBP',
+    signedContractValue: 350000,
+    futurePipelineEstimate: 731440,
     supportedPipeline: 731440,
     unbackedPipeline: 1568560,
     totalNominalPipeline: 2300000,
@@ -1146,6 +1183,8 @@ export function loadNormalizedCRMData() {
     officialStory: '14 docks deployed for perimeter night security. Contract expires January 2027.',
     sector: 'Industrial Manufacturing & Critical Infrastructure',
     currency: 'EUR',
+    signedContractValue: 140000,
+    futurePipelineEstimate: 0,
     supportedPipeline: 140000,
     unbackedPipeline: 1410000,
     totalNominalPipeline: 1550000,
@@ -1196,6 +1235,9 @@ export function getDealById(id: string): Deal | undefined {
   return undefined;
 }
 
+/**
+ * Returns genuine evidence item or undefined if source is not in repository (NO FABRICATION)
+ */
 export function getEvidenceById(id: string): EvidenceReference | undefined {
   const data = getCRMData();
   return data.allEvidenceItems[id];
@@ -1203,24 +1245,19 @@ export function getEvidenceById(id: string): EvidenceReference | undefined {
 
 export function appendLiveSignal(signal: LiveSignal) {
   const data = getCRMData();
-  data.signals.unshift(signal);
-  // Persist to signals.json
-  const filePath = path.join(DATA_DIR, 'signals.json');
-  try {
-    fs.writeFileSync(filePath, JSON.stringify({ signals: data.signals }, null, 2));
-  } catch (err) {
-    console.error('Error saving signals.json:', err);
+  // Deduplicate by stable ID
+  const exists = data.signals.some((s) => s.id === signal.id);
+  if (!exists) {
+    data.signals.unshift(signal);
+    writeJsonFileSafely('signals.json', { signals: data.signals });
   }
 }
 
 export function appendCRMNote(note: CRMNote) {
   const data = getCRMData();
-  data.notes.unshift(note);
-  // Persist to notes.json
-  const filePath = path.join(DATA_DIR, 'notes.json');
-  try {
-    fs.writeFileSync(filePath, JSON.stringify({ notes: data.notes }, null, 2));
-  } catch (err) {
-    console.error('Error saving notes.json:', err);
+  const exists = data.notes.some((n) => n.id === note.id);
+  if (!exists) {
+    data.notes.unshift(note);
+    writeJsonFileSafely('notes.json', { notes: data.notes });
   }
 }
