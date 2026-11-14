@@ -1,0 +1,279 @@
+{
+ "readme": "# Account records (data pack)\n\nThese are the records FlytBase holds on your accounts from before you took them over: contracts, deal\nhistory, call notes, emails, the requests log and weekly usage. Everything here is fictional.\n\nIt is the record, not the answer. It shows what was sold, what was said to us and what the docks did.\nIt does not say why. What you learned this morning is the other half: your own export.\n\nPer account:\n\n- `profile.json`: who is on file, and what is not on file.\n- `deal_history.json`: the commercial history up to the handover, and what was on file as open.\n- `contract.txt`: a summary of the order form.\n- `invoices.json`: what was invoiced and paid.\n- `calls_index.json`: every call on file, with its summary and actions. `calls/` holds the notes\n  or transcript where one was kept.\n- `mail_log.json`: every email on file, written by people and sent automatically. `emails/` holds\n  the longer threads.\n- `tickets.json`: every support ticket, with its conversation.\n- `requests.csv`: customer success's own list of requests it was tracking at the handover, which\n  also holds requests that never became tickets.\n- `internal_notes.json`: notes about the account from FlytBase's internal channel (A and B).\n- `flights.csv`: every flight on record to 31 October 2026: date, start time, dock, minutes,\n  scheduled or manual, and how it ended. Earlier flights were not kept in this record.\n- `usage_weekly.csv`: the same flights counted by dock and week, with days online.\n- `devices.json`, `device_events.csv`: the docks and what they reported (offline, back online,\n  software updates, faults, short connection drops).\n- `users.json`: logins on the account and how often each signs in (A and B).\n\nDock ids are FlytBase's own. Which force, plant or site each dock sits at was not copied into\nthese records, and a login does not say where its user works.\n\nFor all accounts: `team.json` (FlytBase colleagues),\n`feature_requests.json` (the feature request log across customers) and `release_notes.json`.\n\nMost of what is here is routine. That is what an account's records look like.\n\nThings to keep in mind:\n\n- A statement by a customer is that person's statement. Check it against usage and against what you\n  were told this morning.\n- The records stop at the handover. Deal stages, promises and outcomes from this morning are only in\n  your own export.\n- New things can arrive while you build. Check `/signals`.\n",
+ "accounts": [
+  {
+   "account": "A",
+   "open": true,
+   "files": [
+    {
+     "path": "calls/2025-06-24_enquiry_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2025-09-02_pilot_scoping.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2025-10-21_pilot_midpoint.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2025-12-16_pilot_review.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-01-13_order_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-02-17_install_kickoff.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-03-24_install_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-04-28_install_close.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-05-19_intro_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-06-02_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-06-30_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-07-22_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-08-19_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-09-09_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-10-06_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-10-20_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls_index.json",
+     "kind": "calls_index"
+    },
+    {
+     "path": "contract.txt",
+     "kind": "contract"
+    },
+    {
+     "path": "deal_history.json",
+     "kind": "deal_history"
+    },
+    {
+     "path": "device_events.csv",
+     "kind": "device_events"
+    },
+    {
+     "path": "devices.json",
+     "kind": "devices"
+    },
+    {
+     "path": "emails/2026-07-09_rhys_tender.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-08-11_karen_batteries.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-09-03_usage_question.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-10-02_rhys_stadium.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-10-28_renewal.txt",
+     "kind": "email"
+    },
+    {
+     "path": "flights.csv",
+     "kind": "flights"
+    },
+    {
+     "path": "internal_notes.json",
+     "kind": "internal_notes"
+    },
+    {
+     "path": "invoices.json",
+     "kind": "invoices"
+    },
+    {
+     "path": "mail_log.json",
+     "kind": "mail_log"
+    },
+    {
+     "path": "profile.json",
+     "kind": "profile"
+    },
+    {
+     "path": "requests.csv",
+     "kind": "requests"
+    },
+    {
+     "path": "tickets.json",
+     "kind": "tickets"
+    },
+    {
+     "path": "usage_weekly.csv",
+     "kind": "usage"
+    },
+    {
+     "path": "users.json",
+     "kind": "users"
+    }
+   ]
+  },
+  {
+   "account": "B",
+   "open": true,
+   "files": [
+    {
+     "path": "calls/2025-08-19_enquiry_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2025-10-07_trial_kickoff.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2025-12-11_trial_review.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-01-08_order_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-02-10_rollout_kickoff.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-03-17_rollout_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-04-23_rollout_close.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-05-21_intro_call.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-06-11_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-07-14_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-08-25_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls/2026-10-13_check_in.txt",
+     "kind": "call"
+    },
+    {
+     "path": "calls_index.json",
+     "kind": "calls_index"
+    },
+    {
+     "path": "contract.txt",
+     "kind": "contract"
+    },
+    {
+     "path": "deal_history.json",
+     "kind": "deal_history"
+    },
+    {
+     "path": "device_events.csv",
+     "kind": "device_events"
+    },
+    {
+     "path": "devices.json",
+     "kind": "devices"
+    },
+    {
+     "path": "emails/2026-07-16_stefan_savings.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-09-18_beatriz_alerts.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-09-22_stefan_case_study.txt",
+     "kind": "email"
+    },
+    {
+     "path": "emails/2026-10-08_finance_mailbox.txt",
+     "kind": "email"
+    },
+    {
+     "path": "flights.csv",
+     "kind": "flights"
+    },
+    {
+     "path": "internal_notes.json",
+     "kind": "internal_notes"
+    },
+    {
+     "path": "invoices.json",
+     "kind": "invoices"
+    },
+    {
+     "path": "mail_log.json",
+     "kind": "mail_log"
+    },
+    {
+     "path": "profile.json",
+     "kind": "profile"
+    },
+    {
+     "path": "requests.csv",
+     "kind": "requests"
+    },
+    {
+     "path": "tickets.json",
+     "kind": "tickets"
+    },
+    {
+     "path": "usage_weekly.csv",
+     "kind": "usage"
+    },
+    {
+     "path": "users.json",
+     "kind": "users"
+    }
+   ]
+  }
+ ],
+ "team": "/pack/team",
+ "signals": "/signals"
+}
