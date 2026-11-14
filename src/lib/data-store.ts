@@ -263,20 +263,53 @@ export function loadNormalizedCRMData() {
   });
 
   // -------------------------------------------------------------
-  // ACCOUNT A: Eastern Counties Police Alliance
+  // ACCOUNT A: Dynamic Opportunity Extraction from exportData & paperwork
   // -------------------------------------------------------------
+  const rawOppsA: any[] = exportData.accounts?.[0]?.opportunities || [];
+  const rawStakeholdersA: any[] = exportData.accounts?.[0]?.stakeholders || [];
+  const rawDeadlinesA: any[] = exportData.accounts?.[0]?.deadlines || [];
+
+  const rawRenewal = rawOppsA.find((o: any) => o.id === 'a_renewal');
+  const rawTarn = rawOppsA.find((o: any) => o.id === 'a_tarn');
+  const rawWestmere = rawOppsA.find((o: any) => o.id === 'a_westmere');
+  const rawTender = rawOppsA.find((o: any) => o.id === 'a_tender');
+
+  // Morning Discovery qualified values from Questathon morning session
+  const MORNING_DISCOVERY_ESTIMATES: Record<string, { estimate: number; formulaLabel: string; notes: string }> = {
+    a_renewal: {
+      estimate: 136361,
+      formulaLabel: 'Executed Baseline: £350,000/yr (doc_a_contract) | Morning Discovery Qualified Estimate: £136,361',
+      notes: 'Annual contract value is £350,000 (signed contract.txt). £136,361 is the discovery estimate qualified during the morning session based on active force utilization. Operational flight logs in flight_log_force_month.csv prove dock usage in Westmere and Metro Central to clear Rhys Calder’s blocker, but flight counts do not calculate commercial contract value.'
+    },
+    a_tarn: {
+      estimate: 142302,
+      formulaLabel: 'Nominal Opportunity Cap: £200,000 (rc_appetite_2) | Morning Discovery Qualified Estimate: £142,302',
+      notes: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412). This figure is an uncontracted discovery estimate.'
+    },
+    a_westmere: {
+      estimate: 93217,
+      formulaLabel: 'Nominal Cap: £250,000 (km_value_2) | Morning Discovery Qualified Estimate: £93,217',
+      notes: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round. The benchmark provides operational business justification, not commercial revenue proof.'
+    },
+    a_tender: {
+      estimate: 359560,
+      formulaLabel: 'Nominal Framework Cap: £1,500,000 (rc_tender_2) | Morning Discovery Qualified Estimate: £359,560',
+      notes: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2). This figure represents discovery positioning, not committed revenue.'
+    },
+  };
+
   const dealsA: Deal[] = [
     {
       id: 'a_renewal',
       accountId: 'A',
-      name: 'Renew the alliance contract (35 docks)',
+      name: rawRenewal?.title || 'Renew the alliance contract (35 docks)',
       currency: 'GBP',
-      nominalValue: 350000,
-      supportedValue: 136361,
-      unsupportedValue: 213639,
-      stage: 'qualified',
+      nominalValue: rawRenewal?.worth_up_to || 350000,
+      supportedValue: MORNING_DISCOVERY_ESTIMATES.a_renewal.estimate,
+      unsupportedValue: Math.max(0, (rawRenewal?.worth_up_to || 350000) - MORNING_DISCOVERY_ESTIMATES.a_renewal.estimate),
+      stage: rawRenewal?.stage || 'qualified',
       statusText: 'Qualified in morning discovery — Blocker open: requires proof of force dock utilization',
-      blocker: {
+      blocker: rawRenewal?.blocker || {
         text: 'Nobody can show which forces actually use the docks',
         status: 'open',
       },
@@ -289,14 +322,14 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_0', 'rc_appetite_2', 'km_usage_1', 'km_value_2', 'flight_log_force_month', 'doc_a_contract'],
       evidenceItems: [],
       calculation: {
-        formula: 'Executed Baseline: £350,000/yr (doc_a_contract) | Morning Discovery Qualified Estimate: £136,361',
+        formula: MORNING_DISCOVERY_ESTIMATES.a_renewal.formulaLabel,
         inputs: [
           { label: 'Executed Contract Baseline', value: '£350,000/yr (35 docks @ £10k/dock/yr, order form doc_a_contract)', sourceId: 'doc_a_contract', factStatus: 'verified' },
           { label: 'Morning Discovery Qualified Estimate', value: '£136,361 (Questathon morning simulation qualified pipeline; uncontracted)', sourceId: 'rc_appetite_0', factStatus: 'told' },
           { label: 'Operational Activity Proof', value: '14 of 18 docks active in Westmere; Tarn Valley/Norwold inactive', sourceId: 'km_usage_1', factStatus: 'verified' },
           { label: 'Uncommitted Opportunity Pipeline', value: '£213,639 (Subject to inactive force renewal approval)', sourceId: 'rc_appetite_2', factStatus: 'told' },
         ],
-        explanation: 'Annual contract value is £350,000 (signed contract.txt). £136,361 is the discovery estimate qualified during the morning session based on active force utilization. Operational flight logs in flight_log_force_month.csv prove dock usage in Westmere and Metro Central to clear Rhys Calder’s blocker, but flight counts do not calculate commercial contract value.',
+        explanation: MORNING_DISCOVERY_ESTIMATES.a_renewal.notes,
       },
       stakeholders: [
         { personId: 'rhys_calder', role: 'champion', details: 'Alliance drone programme lead; owns renewal proposal presentation' },
@@ -307,14 +340,14 @@ export function loadNormalizedCRMData() {
     {
       id: 'a_tarn',
       accountId: 'A',
-      name: 'Tarn Valley and Norwold go live',
+      name: rawTarn?.title || 'Tarn Valley and Norwold go live',
       currency: 'GBP',
-      nominalValue: 200000,
-      supportedValue: 142302,
-      unsupportedValue: 57698,
-      stage: 'cleared',
+      nominalValue: rawTarn?.worth_up_to || 200000,
+      supportedValue: MORNING_DISCOVERY_ESTIMATES.a_tarn.estimate,
+      unsupportedValue: Math.max(0, (rawTarn?.worth_up_to || 200000) - MORNING_DISCOVERY_ESTIMATES.a_tarn.estimate),
+      stage: rawTarn?.stage || 'cleared',
       statusText: 'Blocker cleared internally — Ready for agreement meeting with Fatima Osei & Rhys Calder',
-      blocker: {
+      blocker: rawTarn?.blocker || {
         text: 'The DPIA cannot be signed without the data-flow documents FlytBase never sent',
         status: 'cleared',
         clearedEvidenceId: 'srv_dataflow',
@@ -327,13 +360,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_2', 'km_others_2', 'fo_dpia_2', 'fo_needs_3', 'pj_ticket', 'srv_dataflow', 'support_ticket_history', 'dataflow_pack'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Opportunity Cap: £200,000 (rc_appetite_2) | Morning Discovery Qualified Estimate: £142,302',
+        formula: MORNING_DISCOVERY_ESTIMATES.a_tarn.formulaLabel,
         inputs: [
           { label: 'Nominal Opportunity Cap', value: '£200,000 (worth_up_to ceiling)', sourceId: 'rc_appetite_2', factStatus: 'told' },
           { label: 'Morning Discovery Qualified Estimate', value: '£142,302 (Questathon morning simulation discovery estimate; uncontracted)', sourceId: 'fo_dpia_2', factStatus: 'told' },
           { label: 'Operational Blocker Clearance Proof', value: 'Dataflow pack produced by Engineering', sourceId: 'srv_dataflow', factStatus: 'verified' },
         ],
-        explanation: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412). This figure is an uncontracted discovery estimate.',
+        explanation: MORNING_DISCOVERY_ESTIMATES.a_tarn.notes,
       },
       stakeholders: [
         { personId: 'fatima_osei', role: 'blocker', details: 'Data protection officer at Tarn Valley; needs data-flow pack to sign DPIA' },
@@ -344,18 +377,23 @@ export function loadNormalizedCRMData() {
     {
       id: 'a_westmere',
       accountId: 'A',
-      name: "Scale Westmere's fleet",
+      name: rawWestmere?.title || "Scale Westmere's fleet",
       currency: 'GBP',
-      nominalValue: 250000,
-      supportedValue: 93217,
-      unsupportedValue: 156783,
-      stage: 'qualified',
+      nominalValue: rawWestmere?.worth_up_to || 250000,
+      supportedValue: MORNING_DISCOVERY_ESTIMATES.a_westmere.estimate,
+      unsupportedValue: Math.max(0, (rawWestmere?.worth_up_to || 250000) - MORNING_DISCOVERY_ESTIMATES.a_westmere.estimate),
+      stage: rawWestmere?.stage || 'qualified',
       statusText: 'Qualified in morning discovery — Blocker: cost per flight vs helicopter hours required',
-      blocker: {
+      blocker: rawWestmere?.blocker || {
         text: 'No cost per flight against helicopter hours',
         status: 'open',
       },
-      deadline: {
+      deadline: rawWestmere?.deadline ? {
+        text: rawWestmere.deadline.text || "Metro Central's finance bid window closes.",
+        soon: !!rawWestmere.deadline.soon,
+        passed: !!rawWestmere.deadline.passed,
+        movesLeft: rawWestmere.deadline.moves_left ?? 8,
+      } : {
         text: "Morning snapshot: 8 moves remaining at handover; Metro Central autumn finance bid window closing.",
         soon: true,
         passed: false,
@@ -364,13 +402,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['km_staff_2', 'km_value_2', 'eb_heli_1', 'eb_drone_2', 'eb_sign_2', 'helicopter_cost_overtime', 'flight_log_force_month'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Cap: £250,000 (km_value_2) | Morning Discovery Qualified Estimate: £93,217',
+        formula: MORNING_DISCOVERY_ESTIMATES.a_westmere.formulaLabel,
         inputs: [
           { label: 'Nominal Opportunity Cap', value: '£250,000 (worth_up_to ceiling)', sourceId: 'km_value_2', factStatus: 'told' },
           { label: 'Morning Discovery Qualified Estimate', value: '£93,217 (Questathon morning simulation estimate; uncontracted)', sourceId: 'eb_drone_2', factStatus: 'told' },
           { label: 'Helicopter Cost Benchmark', value: '£1,500/hr all-in benchmark', sourceId: 'helicopter_cost_overtime', factStatus: 'verified' },
         ],
-        explanation: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round. The benchmark provides operational business justification, not commercial revenue proof.',
+        explanation: MORNING_DISCOVERY_ESTIMATES.a_westmere.notes,
       },
       stakeholders: [
         { personId: 'ewan_brooks', role: 'payer', details: 'Finance business partner; owns finance bid into autumn round' },
@@ -381,18 +419,22 @@ export function loadNormalizedCRMData() {
     {
       id: 'a_tender',
       accountId: 'A',
-      name: 'Position for the 300-dock framework tender',
+      name: rawTender?.title || 'Position for the 300-dock framework tender',
       currency: 'GBP',
-      nominalValue: 1500000,
-      supportedValue: 359560,
-      unsupportedValue: 1140440,
-      stage: 'qualified',
+      nominalValue: rawTender?.worth_up_to || 1500000,
+      supportedValue: MORNING_DISCOVERY_ESTIMATES.a_tender.estimate,
+      unsupportedValue: Math.max(0, (rawTender?.worth_up_to || 1500000) - MORNING_DISCOVERY_ESTIMATES.a_tender.estimate),
+      stage: rawTender?.stage || 'qualified',
       statusText: 'Qualified in morning discovery — Blocker: specification has no costed operating model',
-      blocker: {
+      blocker: rawTender?.blocker || {
         text: 'The specification has no costed operating model',
         status: 'open',
       },
-      deadline: {
+      deadline: rawTender?.deadline ? {
+        text: rawTender.deadline.text || 'Tender specification is being finalised by alliance procurement.',
+        soon: !!rawTender.deadline.soon,
+        passed: !!rawTender.deadline.passed,
+      } : {
         text: 'Tender specification is being finalised by alliance procurement.',
         soon: false,
         passed: false,
@@ -400,13 +442,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_tender_2', 'hd_calloff_2', 'rc_funding_2', 'eb_sign_2', 'km_staff_2'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Framework Cap: £1,500,000 (rc_tender_2) | Morning Discovery Qualified Estimate: £359,560',
+        formula: MORNING_DISCOVERY_ESTIMATES.a_tender.formulaLabel,
         inputs: [
           { label: 'Nominal Framework Ambition', value: '£1,500,000 (worth_up_to ceiling)', sourceId: 'rc_tender_2', factStatus: 'told' },
           { label: 'Morning Discovery Qualified Estimate', value: '£359,560 (Questathon morning simulation baseline position; uncontracted)', sourceId: 'hd_calloff_2', factStatus: 'told' },
           { label: 'Multi-Force Funding Reality', value: 'No pooled budget; each force must fund call-offs', sourceId: 'rc_funding_2', factStatus: 'told' },
         ],
-        explanation: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2). This figure represents discovery positioning, not committed revenue.',
+        explanation: MORNING_DISCOVERY_ESTIMATES.a_tender.notes,
       },
       stakeholders: [
         { personId: 'hannah_doyle', role: 'blocker', details: 'Alliance procurement lead; sets framework tender specifications' },
@@ -1187,21 +1229,28 @@ export function loadNormalizedCRMData() {
     });
   });
 
+  // Dynamically derive Account A metrics from underlying deals and profile record
+  const profileRecordA = paperworkA.records?.find((r: any) => r.kind === 'profile');
+  const signedContractBaselineA = profileRecordA?.data?.renewal?.annual_value || 350000;
+  const qualifiedDiscoveryEstimateA = dealsA.reduce((sum, d) => sum + d.supportedValue, 0);
+  const nominalOpportunityCeilingA = dealsA.reduce((sum, d) => sum + d.nominalValue, 0);
+  const unbackedPipelineA = Math.max(0, nominalOpportunityCeilingA - qualifiedDiscoveryEstimateA);
+
   const accountA: AccountData = {
     id: 'A',
-    name: 'Eastern Counties Police Alliance',
-    officialStory: 'Rollout under way. 4 forces, 35 docks, 300-dock framework tender in preparation.',
-    sector: 'Public Safety & Law Enforcement',
-    currency: 'GBP',
-    signedContractBaseline: 350000,
-    qualifiedDiscoveryEstimate: 731440,
-    nominalOpportunityCeiling: 2300000,
+    name: exportData.accounts?.[0]?.name || profileRecordA?.data?.name || 'Eastern Counties Police Alliance',
+    officialStory: exportData.accounts?.[0]?.official_story || 'Rollout under way. 4 forces, 35 docks, 300-dock framework tender in preparation.',
+    sector: profileRecordA?.data?.sector || 'Public Safety & Law Enforcement',
+    currency: profileRecordA?.data?.currency || 'GBP',
+    signedContractBaseline: signedContractBaselineA,
+    qualifiedDiscoveryEstimate: qualifiedDiscoveryEstimateA,
+    nominalOpportunityCeiling: nominalOpportunityCeilingA,
     unbackedCustomerClaims: 0,
-    signedContractValue: 350000,
-    futurePipelineEstimate: 731440,
-    supportedPipeline: 731440,
-    unbackedPipeline: 1568560,
-    totalNominalPipeline: 2300000,
+    signedContractValue: signedContractBaselineA,
+    futurePipelineEstimate: qualifiedDiscoveryEstimateA,
+    supportedPipeline: qualifiedDiscoveryEstimateA,
+    unbackedPipeline: unbackedPipelineA,
+    totalNominalPipeline: nominalOpportunityCeilingA,
     deals: dealsA,
     stakeholders: stakeholdersA,
     topActions: actionsA.slice(0, 3),
@@ -1210,33 +1259,41 @@ export function loadNormalizedCRMData() {
     knowledgeGaps: gapsA,
     deadlines: exportData.accounts?.[0]?.deadlines || [],
     offers: exportData.accounts?.[0]?.offers || [],
-    notOnFile: paperworkA.records?.find((r: any) => r.kind === 'profile')?.data?.not_on_file || [],
+    notOnFile: profileRecordA?.data?.not_on_file || [],
   };
+
+  // Dynamically derive Account B metrics from underlying deals and profile record
+  const profileRecordB = paperworkB.records?.find((r: any) => r.kind === 'profile');
+  const signedContractBaselineB = profileRecordB?.data?.renewal?.annual_value || 140000;
+  const qualifiedDiscoveryEstimateB = dealsB.reduce((sum, d) => sum + d.supportedValue, 0);
+  const nominalOpportunityCeilingB = dealsB.reduce((sum, d) => sum + d.nominalValue, 0);
+  const unbackedClaimsB = 1200000; // Stefan Roy email statement without calculations
+  const unbackedPipelineB = Math.max(0, nominalOpportunityCeilingB - qualifiedDiscoveryEstimateB);
 
   const accountB: AccountData = {
     id: 'B',
-    name: 'Aldermoor Industrial Group',
-    officialStory: '14 docks deployed for perimeter night security. Contract expires January 2027.',
-    sector: 'Industrial Manufacturing & Critical Infrastructure',
-    currency: 'EUR',
-    signedContractBaseline: 140000,
-    qualifiedDiscoveryEstimate: 0,
-    nominalOpportunityCeiling: 350000,
-    unbackedCustomerClaims: 1200000,
-    signedContractValue: 140000,
-    futurePipelineEstimate: 0,
-    supportedPipeline: 140000,
-    unbackedPipeline: 1410000,
-    totalNominalPipeline: 1550000,
+    name: exportData.accounts?.[1]?.name || profileRecordB?.data?.name || 'Aldermoor Industrial Group',
+    officialStory: exportData.accounts?.[1]?.official_story || '14 docks deployed for perimeter night security. Contract expires January 2027.',
+    sector: profileRecordB?.data?.sector || 'Industrial Manufacturing & Critical Infrastructure',
+    currency: profileRecordB?.data?.currency || 'EUR',
+    signedContractBaseline: signedContractBaselineB,
+    qualifiedDiscoveryEstimate: qualifiedDiscoveryEstimateB,
+    nominalOpportunityCeiling: nominalOpportunityCeilingB,
+    unbackedCustomerClaims: unbackedClaimsB,
+    signedContractValue: signedContractBaselineB,
+    futurePipelineEstimate: qualifiedDiscoveryEstimateB,
+    supportedPipeline: signedContractBaselineB,
+    unbackedPipeline: unbackedPipelineB,
+    totalNominalPipeline: nominalOpportunityCeilingB,
     deals: dealsB,
     stakeholders: stakeholdersB,
     topActions: actionsB.slice(0, 3),
     allActions: actionsB,
     risks: risksB,
     knowledgeGaps: gapsB,
-    deadlines: [{ text: 'Contract Term Expiration (31 January 2027)', passed: false, soon: true }],
+    deadlines: exportData.accounts?.[1]?.deadlines || [],
     offers: exportData.accounts?.[1]?.offers || [],
-    notOnFile: paperworkB.records?.find((r: any) => r.kind === 'profile')?.data?.not_on_file || [],
+    notOnFile: profileRecordB?.data?.not_on_file || [],
   };
 
   const parsedSignals: LiveSignal[] = getStoredSignals();
