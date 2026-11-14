@@ -35,9 +35,10 @@ Every claim in the CRM carries an evidentiary badge:
 - **Aldermoor Contract Baseline:** €140,000 is an existing annual contract baseline (14 docks @ €10k) expiring 31 Jan 2027, NOT a secured renewal. Renewal is actively blocked pending a plant-by-plant quote breakdown requested by Group Finance.
 
 #### C. Stakeholder Authority Rules
-- **Champion ≠ Budget Payer:** Rhys Calder is an ardent ally, but cannot approve spending; each member force signs its own call-off (`rc_funding_2`).
-- **Procurement ≠ Budget Owner:** Hannah Doyle manages specifications, but call-offs require force finance sign-off (`hd_calloff_2`).
-- **Budget Owners:** Ewan Brooks owns Metro Central's finance bid; Nadia Rahman owns Aldermoor Group Finance approval.
+- **Champion ≠ Budget Payer:** Rhys Calder is an ardent ally and operational programme lead, but cannot approve spending; each member force signs its own call-off (`rc_funding_2`).
+- **Procurement ≠ Budget Owner:** Hannah Doyle manages specifications, but call-offs require individual force finance sign-off (`hd_calloff_2`).
+- **Force Budget Owner:** Ewan Brooks owns Metro Central's finance bid (`eb_sign_2`).
+- **Unconfirmed Renewal Authority:** Nadia Rahman is Group Finance Controller at Aldermoor; commercial renewal budget signing authority remains unconfirmed pending direct discovery (communication has been confined to unanswered shared mailbox inquiries).
 - **Compliance Blocker:** Fatima Osei (DPO) holds the key to the DPIA; Tarn Valley and Norwold were stalled for 4 months awaiting data flows (`fo_needs_3`, `pj_ticket`).
 
 #### D. Monday Action Prioritization Formula
@@ -51,9 +52,9 @@ $$\text{Priority Score (0--100)} = \text{Deal Value Weight (30)} + \text{Deadlin
 
 1. **No Invented Win Probabilities:** Where conversion data is absent, the system displays *"Insufficient evidence to estimate"* rather than generating speculative percentages.
 2. **No Inferred Dock Locations:** The customer success records omitted per-force and per-plant dock serial locations (flagged as high-priority blind spots).
-3. **No Unilateral Claim Promotion:** Stefan Roy's €1.2M savings claim remains flagged as an unbacked claim until plant finance managers supply audited guard replacement logs.
-4. **Distributed Rate Limiting & Persistence:** Rate limits are enforced via distributed atomic locking (supporting Vercel KV REST, Postgres, or atomic file stores), with conservative reservation before dispatch to prevent duplicate calls on network drops. Live sync is triggered manually via `get_signals` to preserve quota.
-5. **Cold-Start Durability:** Confirmed remote writes and locally pending notes are stored with explicit sync status, persisting across cold starts.
+3. **No Unilateral Claim Promotion:** Stefan Roy's €1.2M savings claim remains flagged as an unbacked customer claim until plant finance managers supply audited guard replacement logs.
+4. **Distributed Storage & Rate Limiting:** Enforces Questathon's 1-call/minute limit via distributed atomic locks with conservative 61s reservation before dispatch. When `KV_REST_API_URL` is set, notes and signals persist in Vercel KV REST across serverless instances and cold starts; otherwise, atomic POSIX file staging serves as single-instance local fallback.
+5. **Continuous Live-Event Ingestion:** Live sync runs via 65-second automatic background polling and manual override, updating without code changes.
 
 ---
 

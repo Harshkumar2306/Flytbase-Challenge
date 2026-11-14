@@ -68,12 +68,16 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
               <Radio className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs uppercase font-bold text-emerald-800 tracking-wider">
                   Live MCP Ingestion Engine
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
                   get_signals Tool
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                  Auto-Polling Active (65s)
                 </span>
               </div>
               <h1 className="text-xl font-bold text-slate-900 mt-0.5">

@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { callTool, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
-import { appendCRMNote, getCRMData } from '@/lib/data-store';
+import { appendCRMNoteAsync } from '@/lib/data-store';
+import { getStoredNotesAsync } from '@/lib/storage';
 import { CRMNote } from '@/types/crm';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const data = getCRMData();
+  const notes = await getStoredNotesAsync();
   return NextResponse.json({
     success: true,
-    notes: data.notes,
+    notes,
   });
 }
 
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
       syncStatus: syncState,
     };
 
-    appendCRMNote(newNote);
+    await appendCRMNoteAsync(newNote);
 
     return NextResponse.json({
       success: true,

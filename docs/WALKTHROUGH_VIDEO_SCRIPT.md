@@ -21,9 +21,9 @@ flowchart LR
 ---
 
 ### [0:00 – 0:20] Scene 1: Introduction & Executive Purpose
-- **Screen:** Open browser at `http://localhost:3000` (or live hosted URL). Show the clean Executive Overview dashboard in Incognito/Private mode.
+- **Screen:** Open browser at the live hosted CRM URL (e.g. `https://flytbase-challenge.vercel.app`) in an Incognito/Private window. Show the clean Executive Overview dashboard without any login gate.
 - **Spoken Script:**
-  > *"Welcome. This is Account Intelligence for FlytBase — a manager-ready Monday CRM built for the Questathon. It connects live to the Questathon MCP to manage two enterprise accounts: Eastern Counties Police Alliance and Aldermoor Industrial Group. Every single pound and euro on this screen is backed by an audited receipt, with zero unbacked champion claims silently slipped into pipeline."*
+  > *"Welcome. This is Account Intelligence for FlytBase — a manager-ready Monday CRM built for the Questathon. It connects live to the Questathon MCP to manage two enterprise accounts: Eastern Counties Police Alliance and Aldermoor Industrial Group. Executed contracts are backed by verified order forms, while morning discovery progression estimates are strictly isolated from committed revenue, and unbacked champion claims are shown apart."*
 
 ---
 
@@ -51,20 +51,20 @@ flowchart LR
 ### [1:35 – 2:05] Scene 4: Power Map & Blind Spot Verification
 - **Screen:** Navigate to **"Power Map"**, then **"Blind Spots"**.
 - **Spoken Script:**
-  > *"Moving to the Power Map: notice how roles are labeled. Rhys Calder is marked as Champion and Decision-Maker, but Budget Payer is explicitly 'No' with citation `rc_funding_2`. In Aldermoor, Group Finance Controller Nadia Rahman is flagged as 'Never Met' — a critical single-point-of-failure risk since shared mailbox inquiries went unanswered.*
+  > *"Moving to the Power Map: notice how roles are labeled. Rhys Calder is marked as Alliance Programme Lead and Champion, but Budget Payer is explicitly 'No' with citation `rc_funding_2`, because each force funds call-offs from its own budget. In Aldermoor, Group Finance Controller Nadia Rahman is flagged as 'Never Met' — renewal signing authority remains unconfirmed since shared mailbox inquiries went unanswered.*
   > *On the Blind Spots tab, we distinguish 'Confirmed not available' from 'Unknown', giving the account manager the exact question to ask on Monday."*
 
 ---
 
 ### [2:05 – 2:35] Scene 5: Live Events Ingestion & Writing Notes Back via MCP
-- **Screen:** Click **"Live Events Feed"**, then click **"Sync MCP"** (top right). Then switch to **"Notes & Tasks (MCP)"**.
+- **Screen:** Click **"Live Events Feed"**. Show the active "Auto-Polling Active (65s)" telemetry badge, then click **"Poll get_signals Now"** (top right). Then switch to **"Notes & Tasks (MCP)"**.
 - **Action:** Show the live sync status. In Notes & Tasks, fill in:
   - Account: `Account A`
   - Kind: `next_step`
   - Text: `Dispatching data-flow pack to Fatima Osei for DPIA review.`
   - Click **"Preview & Confirm Dispatch"**, then confirm.
 - **Spoken Script:**
-  > *"The system stays live without code changes through manual sync that queries get_signals while enforcing the distributed 1-call-per-minute rate limit lock. Under Notes & Tasks, writes are tracked with explicit sync status, distinguishing confirmed remote writes from locally saved notes, with cold-start persistence across restarts."*
+  > *"The system stays live automatically through background polling every 65 seconds — and supports instant manual sync — while strictly enforcing the distributed 1-call-per-minute rate limit lock. Under Notes & Tasks, writes are tracked with explicit sync status, distinguishing confirmed remote writes from locally saved notes, with cold-start persistence across restarts."*
 
 ---
 

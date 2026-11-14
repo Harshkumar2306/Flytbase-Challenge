@@ -57,6 +57,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+
+    // Automatic Live-Event Background Ingestion
+    // Checks /api/crm/sync every 65 seconds (respects Questathon 1-call-per-minute rate limit)
+    const runBackgroundSync = async () => {
+      try {
+        const res = await fetch('/api/crm/sync', { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.newSignalsCount > 0) {
+          // New events ingested: reload fresh state seamlessly
+          loadData();
+        }
+      } catch (err) {
+        // Silently handle transient network pauses
+      }
+    };
+
+    // Initial opportunistic background sync 3 seconds after initial page load
+    const initialSyncTimer = setTimeout(runBackgroundSync, 3000);
+
+    // Continuous 65-second recurring background poll
+    const syncInterval = setInterval(runBackgroundSync, 65000);
+
+    return () => {
+      clearTimeout(initialSyncTimer);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   // Handler for opening genuine evidence modal by ID (NO FABRICATION)

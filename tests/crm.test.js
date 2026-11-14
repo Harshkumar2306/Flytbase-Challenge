@@ -17,10 +17,14 @@ import {
 } from '../src/lib/mcp.ts';
 import { 
   getStoredNotes, 
+  getStoredNotesAsync,
   saveStoredNote, 
+  saveStoredNoteAsync,
   updateStoredNoteStatus,
   saveStoredSignal,
+  saveStoredSignalAsync,
   getStoredSignals,
+  getStoredSignalsAsync,
   getStorageDiagnostics
 } from '../src/lib/storage.ts';
 
@@ -256,8 +260,42 @@ describe('Priority 4 & 5: Distributed Locking, Storage Persistence & Idempotency
   test('Storage diagnostics expose active engine and telemetry', () => {
     const diag = getStorageDiagnostics();
     assert.ok(['vercel_kv', 'postgres', 'atomic_file_store'].includes(diag.engine));
+    assert.ok(typeof diag.engineDescription === 'string');
+    assert.ok(typeof diag.isDistributed === 'boolean');
     assert.ok(typeof diag.notesCount === 'number');
     assert.ok(typeof diag.signalsCount === 'number');
+  });
+
+  test('Async storage methods read and persist notes and signals seamlessly', async () => {
+    const asyncNoteId = `async_note_${Date.now()}`;
+    await saveStoredNoteAsync({
+      id: asyncNoteId,
+      accountId: 'A',
+      kind: 'task',
+      title: 'Async Persistence Verification',
+      text: 'Validating async storage pipeline',
+      createdAt: new Date().toISOString(),
+      author: 'Async Test',
+      syncStatus: 'saved_locally_pending',
+    });
+
+    const asyncNotes = await getStoredNotesAsync();
+    const found = asyncNotes.find((n) => n.id === asyncNoteId);
+    assert.ok(found, 'Async saved note must be readable via getStoredNotesAsync');
+
+    const asyncSigId = `async_sig_${Date.now()}`;
+    const inserted = await saveStoredSignalAsync({
+      id: asyncSigId,
+      timestamp: new Date().toISOString(),
+      sourceId: 'async_stream',
+      text: 'Async signal persistence verified',
+      accountId: 'A',
+    });
+    assert.equal(inserted, true, 'Async signal must be successfully saved');
+
+    const asyncSignals = await getStoredSignalsAsync();
+    const sigFound = asyncSignals.find((s) => s.id === asyncSigId);
+    assert.ok(sigFound, 'Async saved signal must be readable via getStoredSignalsAsync');
   });
 });
 
@@ -288,8 +326,10 @@ describe('Priority 6: Action Scoring Consistency & Power Map', () => {
   });
 
   test('Gaps and unknown roles are explicitly labeled and uninvented', () => {
+    const ecpa = getAccountById('A');
     const aldermoor = getAccountById('B');
     assert.ok(aldermoor, 'Aldermoor must exist');
+    assert.ok(ecpa, 'ECPA must exist');
 
     // Gap 1: Group Finance named signatory
     const gapFinance = aldermoor.knowledgeGaps.find((g) => g.id === 'gap_b_1');
@@ -297,10 +337,15 @@ describe('Priority 6: Action Scoring Consistency & Power Map', () => {
     assert.equal(gapFinance.status, 'confirmed_not_available');
     assert.equal(gapFinance.blocksDealProgression, true);
 
-    // Unmet stakeholders
+    // Unmet stakeholders and authority boundaries
     const nadia = aldermoor.stakeholders.find((s) => s.id === 'nadia_rahman');
     assert.ok(nadia, 'Nadia Rahman must exist');
     assert.equal(nadia.isMet, false, 'Nadia must be marked unmet');
     assert.equal(nadia.decisionMakerStatus, 'unknown', 'Nadia decision maker status must be unknown');
+    assert.equal(nadia.payerStatus, 'unknown', 'Nadia renewal budget signing authority must be unconfirmed/unknown');
+
+    const rhys = ecpa.stakeholders.find((s) => s.id === 'rhys_calder');
+    assert.ok(rhys, 'Rhys Calder must exist');
+    assert.equal(rhys.payerStatus, false, 'Rhys Calder must NOT be marked as payer (rc_funding_2: each force funds own budget)');
   });
 });

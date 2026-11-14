@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { callTool, getRateLimitStatus, getSafeToken } from '@/lib/mcp';
-import { appendLiveSignal, getCRMData } from '@/lib/data-store';
+import { appendLiveSignalAsync, getCRMDataAsync } from '@/lib/data-store';
+import { getStorageDiagnostics } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+async function handleSync() {
   const token = getSafeToken();
   if (!token) {
     return NextResponse.json({
@@ -15,11 +16,13 @@ export async function POST() {
 
   const rateCheck = getRateLimitStatus();
   if (!rateCheck.canCallNow) {
+    const currentData = await getCRMDataAsync();
     return NextResponse.json({
       success: false,
       message: `Token allows 1 call per minute. Wait ${rateCheck.secondsRemaining}s before syncing again.`,
       retryAfterSeconds: rateCheck.secondsRemaining,
-      data: getCRMData(),
+      data: currentData,
+      storage: getStorageDiagnostics(),
     });
   }
 
@@ -32,7 +35,7 @@ export async function POST() {
         ? signalsResult.data
         : signalsResult.data.signals || [];
 
-      const current = getCRMData();
+      const current = await getCRMDataAsync();
       let addedCount = 0;
 
       for (const sig of incoming) {
@@ -46,7 +49,7 @@ export async function POST() {
 
         const exists = current.signals.some((s) => s.id === stableId);
         if (!exists) {
-          appendLiveSignal({
+          await appendLiveSignalAsync({
             id: stableId,
             timestamp: sig.timestamp || new Date().toISOString(),
             accountId: sig.account || sig.accountId,
@@ -58,21 +61,25 @@ export async function POST() {
         }
       }
 
+      const updatedData = await getCRMDataAsync();
       return NextResponse.json({
         success: true,
         message: addedCount > 0 
-          ? `Manual sync complete: ${addedCount} new signal(s) ingested from MCP.`
-          : 'Manual sync complete: No new signals on Questathon server.',
+          ? `Live sync complete: ${addedCount} new signal(s) ingested from MCP.`
+          : 'Live sync complete: No new signals on Questathon server.',
         newSignalsCount: addedCount,
-        data: getCRMData(),
+        data: updatedData,
+        storage: getStorageDiagnostics(),
       });
     }
 
+    const currentData = await getCRMDataAsync();
     return NextResponse.json({
       success: false,
       error: signalsResult.error || 'Failed to fetch signals from MCP.',
       retryAfterSeconds: signalsResult.retryAfterSeconds,
-      data: getCRMData(),
+      data: currentData,
+      storage: getStorageDiagnostics(),
     });
   } catch (err: any) {
     return NextResponse.json({
@@ -80,4 +87,12 @@ export async function POST() {
       error: err.message,
     }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return handleSync();
+}
+
+export async function POST() {
+  return handleSync();
 }

@@ -12,6 +12,8 @@ const META_KEY = 'sync_meta.json';
 
 export interface StorageDiagnostics {
   engine: 'vercel_kv' | 'postgres' | 'atomic_file_store';
+  engineDescription: string;
+  isDistributed: boolean;
   notesCount: number;
   signalsCount: number;
   isLocked: boolean;
@@ -94,24 +96,33 @@ function readJsonWithFallback<T>(filename: string, fallback: T): T {
 // VERCEL KV REST INTEGRATION (When configured)
 // ==========================================
 
-async function kvRestCall<T>(command: string, ...args: (string | number)[]): Promise<T | null> {
+async function kvRestCommand<T>(command: (string | number)[]): Promise<T | null> {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
 
   try {
-    const endpoint = `${url}/${command}/${args.map(encodeURIComponent).join('/')}`;
-    const res = await fetch(endpoint, {
-      headers: { Authorization: `Bearer ${token}` },
+    const baseUrl = url.replace(/\/$/, '');
+    const res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(command),
       cache: 'no-store',
     });
     if (!res.ok) return null;
     const json = await res.json();
     return json.result as T;
   } catch (err) {
-    console.error('KV REST error:', err);
+    console.error('KV REST Command error:', err);
     return null;
   }
+}
+
+async function kvRestCall<T>(command: string, ...args: (string | number)[]): Promise<T | null> {
+  return kvRestCommand<T>([command.toUpperCase(), ...args]);
 }
 
 // ==========================================
@@ -219,7 +230,7 @@ export async function releaseDistributedLock(cooldownSeconds = 61): Promise<void
     isLocked: false,
     lockedAt: 0,
     lastCallTimestamp: now,
-    nextAllowedTimestamp: Math.max(current.nextAllowedTimestamp, now + (cooldownSeconds * 1000)),
+    nextAllowedTimestamp: cooldownSeconds === 0 ? 0 : Math.max(current.nextAllowedTimestamp, now + (cooldownSeconds * 1000)),
   };
   writeLockRecord(updatedLock);
 }
@@ -280,12 +291,28 @@ export function getRateLimitStatus(): {
 }
 
 // ==========================================
-// PERSISTENT NOTES MANAGEMENT
+// PERSISTENT NOTES MANAGEMENT (KV + File Fallback)
 // ==========================================
 
 export function getStoredNotes(): CRMNote[] {
   const data = readJsonWithFallback<{ notes: CRMNote[] }>(NOTES_KEY, { notes: [] });
   return data.notes || [];
+}
+
+export async function getStoredNotesAsync(): Promise<CRMNote[]> {
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const result = await kvRestCommand<any>(['GET', 'questathon:notes']);
+      if (result) {
+        const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.notes)) return parsed.notes;
+      }
+    } catch (e) {
+      console.error('Failed reading notes from Vercel KV, falling back to local store:', e);
+    }
+  }
+  return getStoredNotes();
 }
 
 export function saveStoredNote(note: CRMNote): void {
@@ -297,6 +324,25 @@ export function saveStoredNote(note: CRMNote): void {
     notes.unshift(note);
   }
   atomicWriteJson(NOTES_KEY, { notes });
+}
+
+export async function saveStoredNoteAsync(note: CRMNote): Promise<void> {
+  saveStoredNote(note);
+
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const currentNotes = await getStoredNotesAsync();
+      const idx = currentNotes.findIndex((n) => n.id === note.id);
+      if (idx >= 0) {
+        currentNotes[idx] = note;
+      } else {
+        currentNotes.unshift(note);
+      }
+      await kvRestCommand<string>(['SET', 'questathon:notes', JSON.stringify(currentNotes)]);
+    } catch (e) {
+      console.error('Failed writing note to Vercel KV:', e);
+    }
+  }
 }
 
 export function updateStoredNoteStatus(
@@ -315,6 +361,30 @@ export function updateStoredNoteStatus(
   }
 }
 
+export async function updateStoredNoteStatusAsync(
+  noteId: string,
+  status: 'synced' | 'saved_locally_pending' | 'pending_retry',
+  confirmedAt?: string,
+  remoteError?: string
+): Promise<void> {
+  updateStoredNoteStatus(noteId, status, confirmedAt, remoteError);
+
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const currentNotes = await getStoredNotesAsync();
+      const note = currentNotes.find((n) => n.id === noteId);
+      if (note) {
+        note.syncStatus = status;
+        if (confirmedAt) note.remoteConfirmedAt = confirmedAt;
+        if (remoteError) note.remoteError = remoteError;
+        await kvRestCommand<string>(['SET', 'questathon:notes', JSON.stringify(currentNotes)]);
+      }
+    } catch (e) {
+      console.error('Failed updating note status in Vercel KV:', e);
+    }
+  }
+}
+
 // ==========================================
 // PERSISTENT SIGNALS MANAGEMENT (COMPOSITE KEY DEDUPLICATION)
 // ==========================================
@@ -322,6 +392,22 @@ export function updateStoredNoteStatus(
 export function getStoredSignals(): LiveSignal[] {
   const data = readJsonWithFallback<{ signals: LiveSignal[] }>(SIGNALS_KEY, { signals: [] });
   return data.signals || [];
+}
+
+export async function getStoredSignalsAsync(): Promise<LiveSignal[]> {
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const result = await kvRestCommand<any>(['GET', 'questathon:signals']);
+      if (result) {
+        const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.signals)) return parsed.signals;
+      }
+    } catch (e) {
+      console.error('Failed reading signals from Vercel KV, falling back to local store:', e);
+    }
+  }
+  return getStoredSignals();
 }
 
 /**
@@ -353,6 +439,40 @@ export function saveStoredSignal(signal: LiveSignal): boolean {
   return false;
 }
 
+export async function saveStoredSignalAsync(signal: LiveSignal): Promise<boolean> {
+  const localInserted = saveStoredSignal(signal);
+
+  if (detectStorageEngine() === 'vercel_kv') {
+    try {
+      const currentSignals = await getStoredSignalsAsync();
+      const compositeKey = signal.id && signal.id.trim() !== ''
+        ? signal.id
+        : `${signal.sourceId || 'signal'}_${signal.timestamp || Date.now()}`;
+
+      const exists = currentSignals.some((s) => {
+        const existingKey = s.id && s.id.trim() !== ''
+          ? s.id
+          : `${s.sourceId || 'signal'}_${s.timestamp}`;
+        return existingKey === compositeKey;
+      });
+
+      if (!exists) {
+        currentSignals.unshift({
+          ...signal,
+          id: compositeKey,
+        });
+        await kvRestCommand<string>(['SET', 'questathon:signals', JSON.stringify(currentSignals)]);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Failed writing signal to Vercel KV:', e);
+    }
+  }
+
+  return localInserted;
+}
+
 // ==========================================
 // STORAGE DIAGNOSTICS FOR AUDIT & DASHBOARD
 // ==========================================
@@ -361,9 +481,19 @@ export function getStorageDiagnostics(): StorageDiagnostics {
   const notes = getStoredNotes();
   const signals = getStoredSignals();
   const rate = getRateLimitStatus();
+  const engine = detectStorageEngine();
+
+  const isDistributed = engine === 'vercel_kv';
+  const engineDescription = engine === 'vercel_kv'
+    ? 'Vercel KV REST (Multi-instance distributed store active across cold starts)'
+    : engine === 'postgres'
+    ? 'PostgreSQL Store (External relational persistence)'
+    : 'Local Atomic File Store (Fallback for local dev/single instance; configure KV_REST_API_URL for distributed multi-instance deployment)';
 
   return {
-    engine: detectStorageEngine(),
+    engine,
+    engineDescription,
+    isDistributed,
     notesCount: notes.length,
     signalsCount: signals.length,
     isLocked: rate.inFlight,

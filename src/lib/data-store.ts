@@ -15,9 +15,13 @@ import type {
 } from '../types/crm';
 import { 
   getStoredNotes, 
+  getStoredNotesAsync,
   saveStoredNote, 
+  saveStoredNoteAsync,
   getStoredSignals, 
-  saveStoredSignal 
+  getStoredSignalsAsync,
+  saveStoredSignal,
+  saveStoredSignalAsync
 } from './storage.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -285,14 +289,14 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_0', 'rc_appetite_2', 'km_usage_1', 'km_value_2', 'flight_log_force_month', 'doc_a_contract'],
       evidenceItems: [],
       calculation: {
-        formula: 'Contract Baseline: £350,000/yr (doc_a_contract) | Morning Discovery Qualified Value: £136,361',
+        formula: 'Executed Baseline: £350,000/yr (doc_a_contract) | Morning Discovery Qualified Estimate: £136,361',
         inputs: [
-          { label: 'Baseline Contract Value', value: '£350,000/yr (35 docks @ £10k/dock/yr)', sourceId: 'doc_a_contract', factStatus: 'verified' },
-          { label: 'Morning Discovery Qualified Value', value: '£136,361 (Qualified stage estimate)', sourceId: 'rc_appetite_0', factStatus: 'told' },
+          { label: 'Executed Contract Baseline', value: '£350,000/yr (35 docks @ £10k/dock/yr, order form doc_a_contract)', sourceId: 'doc_a_contract', factStatus: 'verified' },
+          { label: 'Morning Discovery Qualified Estimate', value: '£136,361 (Questathon morning simulation qualified pipeline; uncontracted)', sourceId: 'rc_appetite_0', factStatus: 'told' },
           { label: 'Operational Activity Proof', value: '14 of 18 docks active in Westmere; Tarn Valley/Norwold inactive', sourceId: 'km_usage_1', factStatus: 'verified' },
-          { label: 'Remaining Unbacked Pipeline', value: '£213,639 (Subject to inactive force renewal)', sourceId: 'rc_appetite_2', factStatus: 'told' },
+          { label: 'Uncommitted Opportunity Pipeline', value: '£213,639 (Subject to inactive force renewal approval)', sourceId: 'rc_appetite_2', factStatus: 'told' },
         ],
-        explanation: 'Annual contract value is £350,000 (signed contract.txt). £136,361 was qualified during the morning discovery based on active force interest. Operational flight logs in flight_log_force_month.csv prove dock usage in Westmere and Metro Central to clear Rhys Calder’s blocker, but flight counts do not calculate commercial contract value.',
+        explanation: 'Annual contract value is £350,000 (signed contract.txt). £136,361 is the discovery estimate qualified during the morning session based on active force utilization. Operational flight logs in flight_log_force_month.csv prove dock usage in Westmere and Metro Central to clear Rhys Calder’s blocker, but flight counts do not calculate commercial contract value.',
       },
       stakeholders: [
         { personId: 'rhys_calder', role: 'champion', details: 'Alliance drone programme lead; owns renewal proposal presentation' },
@@ -323,13 +327,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_2', 'km_others_2', 'fo_dpia_2', 'fo_needs_3', 'pj_ticket', 'srv_dataflow', 'support_ticket_history', 'dataflow_pack'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Opportunity Cap: £200,000 (rc_appetite_2) | Morning Discovery Qualified Value: £142,302',
+        formula: 'Nominal Opportunity Cap: £200,000 (rc_appetite_2) | Morning Discovery Qualified Estimate: £142,302',
         inputs: [
           { label: 'Nominal Opportunity Cap', value: '£200,000 (worth_up_to ceiling)', sourceId: 'rc_appetite_2', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£142,302 (Blocker cleared stage)', sourceId: 'fo_dpia_2', factStatus: 'told' },
-          { label: 'Blocker Clearance Proof', value: 'Dataflow pack produced by Engineering', sourceId: 'srv_dataflow', factStatus: 'verified' },
+          { label: 'Morning Discovery Qualified Estimate', value: '£142,302 (Questathon morning simulation discovery estimate; uncontracted)', sourceId: 'fo_dpia_2', factStatus: 'told' },
+          { label: 'Operational Blocker Clearance Proof', value: 'Dataflow pack produced by Engineering', sourceId: 'srv_dataflow', factStatus: 'verified' },
         ],
-        explanation: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412).',
+        explanation: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412). This figure is an uncontracted discovery estimate.',
       },
       stakeholders: [
         { personId: 'fatima_osei', role: 'blocker', details: 'Data protection officer at Tarn Valley; needs data-flow pack to sign DPIA' },
@@ -360,13 +364,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['km_staff_2', 'km_value_2', 'eb_heli_1', 'eb_drone_2', 'eb_sign_2', 'helicopter_cost_overtime', 'flight_log_force_month'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Cap: £250,000 (km_value_2) | Morning Discovery Qualified Value: £93,217',
+        formula: 'Nominal Cap: £250,000 (km_value_2) | Morning Discovery Qualified Estimate: £93,217',
         inputs: [
           { label: 'Nominal Opportunity Cap', value: '£250,000 (worth_up_to ceiling)', sourceId: 'km_value_2', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£93,217 (Qualified stage estimate)', sourceId: 'eb_drone_2', factStatus: 'told' },
+          { label: 'Morning Discovery Qualified Estimate', value: '£93,217 (Questathon morning simulation estimate; uncontracted)', sourceId: 'eb_drone_2', factStatus: 'told' },
           { label: 'Helicopter Cost Benchmark', value: '£1,500/hr all-in benchmark', sourceId: 'helicopter_cost_overtime', factStatus: 'verified' },
         ],
-        explanation: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round.',
+        explanation: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round. The benchmark provides operational business justification, not commercial revenue proof.',
       },
       stakeholders: [
         { personId: 'ewan_brooks', role: 'payer', details: 'Finance business partner; owns finance bid into autumn round' },
@@ -396,13 +400,13 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_tender_2', 'hd_calloff_2', 'rc_funding_2', 'eb_sign_2', 'km_staff_2'],
       evidenceItems: [],
       calculation: {
-        formula: 'Nominal Framework Cap: £1,500,000 (rc_tender_2) | Morning Discovery Qualified Value: £359,560',
+        formula: 'Nominal Framework Cap: £1,500,000 (rc_tender_2) | Morning Discovery Qualified Estimate: £359,560',
         inputs: [
           { label: 'Nominal Framework Ambition', value: '£1,500,000 (worth_up_to ceiling)', sourceId: 'rc_tender_2', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£359,560 (Qualified base position)', sourceId: 'hd_calloff_2', factStatus: 'told' },
+          { label: 'Morning Discovery Qualified Estimate', value: '£359,560 (Questathon morning simulation baseline position; uncontracted)', sourceId: 'hd_calloff_2', factStatus: 'told' },
           { label: 'Multi-Force Funding Reality', value: 'No pooled budget; each force must fund call-offs', sourceId: 'rc_funding_2', factStatus: 'told' },
         ],
-        explanation: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2).',
+        explanation: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2). This figure represents discovery positioning, not committed revenue.',
       },
       stakeholders: [
         { personId: 'hannah_doyle', role: 'blocker', details: 'Alliance procurement lead; sets framework tender specifications' },
@@ -920,7 +924,7 @@ export function loadNormalizedCRMData() {
       available: false,
       isMet: false,
       decisionMakerStatus: 'unknown',
-      payerStatus: true, // Group finance holds budget approval
+      payerStatus: 'unknown', // Group Finance controller; renewal signing authority unconfirmed
       operationalUserStatus: false,
       technicalBlockerStatus: false,
       procurementBlockerStatus: true,
@@ -930,7 +934,7 @@ export function loadNormalizedCRMData() {
       associatedDealIds: ['b_renewal'],
       evidenceIds: ['email_b_finance', 'doc_b_profile'],
       sourceRecords: ['emails/2026-10-08_finance_mailbox.txt'],
-      notes: 'CRITICAL GAP: Never met. Shared mailbox email went unanswered. Controls renewal approval.',
+      notes: 'CRITICAL GAP: Never met. Shared mailbox email went unanswered. Group finance controller; renewal budget signing authority requires explicit confirmation.',
     },
     {
       id: 'owen_fitch',
@@ -1262,6 +1266,17 @@ export function getCRMData() {
   return cachedCRMData!;
 }
 
+export async function getCRMDataAsync() {
+  if (!cachedCRMData) {
+    loadNormalizedCRMData();
+  }
+  if (cachedCRMData) {
+    cachedCRMData.signals = await getStoredSignalsAsync();
+    cachedCRMData.notes = await getStoredNotesAsync();
+  }
+  return cachedCRMData!;
+}
+
 export function getAccountById(id: string): AccountData | undefined {
   const data = getCRMData();
   return data.accounts.find((a) => a.id.toLowerCase() === id.toLowerCase());
@@ -1292,10 +1307,25 @@ export function appendLiveSignal(signal: LiveSignal) {
   }
 }
 
+export async function appendLiveSignalAsync(signal: LiveSignal): Promise<boolean> {
+  const added = await saveStoredSignalAsync(signal);
+  if (cachedCRMData) {
+    cachedCRMData.signals = await getStoredSignalsAsync();
+  }
+  return added;
+}
+
 export function appendCRMNote(note: CRMNote) {
   // Durable storage with retry and sync status tracking
   saveStoredNote(note);
   if (cachedCRMData) {
     cachedCRMData.notes = getStoredNotes();
+  }
+}
+
+export async function appendCRMNoteAsync(note: CRMNote): Promise<void> {
+  await saveStoredNoteAsync(note);
+  if (cachedCRMData) {
+    cachedCRMData.notes = await getStoredNotesAsync();
   }
 }
