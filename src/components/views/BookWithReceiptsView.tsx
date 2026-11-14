@@ -82,27 +82,27 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
             </p>
           </div>
 
-          <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-              2. Qualified Morning Pipeline (ECPA)
+          <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200">
+            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">
+              2. Qualified Discovery Estimates (ECPA)
             </span>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-xl font-black text-slate-900">£731,440</span>
+              <span className="text-xl font-black text-blue-700">£731,440</span>
               <EvidenceBadge status="told" />
             </div>
-            <p className="text-[10px] text-emerald-900/80 mt-0.5">
-              Sum of 4 morning qualified deal valuations
+            <p className="text-[10px] text-blue-900/80 mt-0.5">
+              Sum of 4 discovery valuations; not booked revenue
             </p>
           </div>
 
-          <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200">
-            <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">
               3. Total Nominal Potential Cap
             </span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-xl font-black text-slate-900">£2.30M + €350k</span>
             </div>
-            <p className="text-[10px] text-blue-900/80 mt-0.5">
+            <p className="text-[10px] text-slate-500 mt-0.5">
               Maximum uncommitted opportunity caps (worth_up_to)
             </p>
           </div>
@@ -159,9 +159,9 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                 </div>
                 <div className="h-6 w-px bg-slate-200" />
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Qualified Pipeline</span>
+                  <span className="text-[10px] text-slate-400 block uppercase">{isECPA ? 'Discovery Estimates' : 'Offer Pitches'}</span>
                   <span className="text-blue-700 text-sm font-bold">
-                    {currencySymbol}{acc.supportedPipeline.toLocaleString()}
+                    {currencySymbol}{isECPA ? acc.supportedPipeline.toLocaleString() : '0'}
                   </span>
                 </div>
                 <div className="h-6 w-px bg-slate-200" />
@@ -232,7 +232,7 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                           title="Click to inspect exact calculation and source IDs"
                         >
                           <span className="text-[10px] uppercase font-semibold text-slate-400 block">
-                            {deal.supportedValue > 0 && deal.id.startsWith('b_') ? 'Contract Baseline' : 'Discovery Value'}
+                            {deal.id === 'b_renewal' ? 'Contract Baseline' : isECPA ? 'Discovery Estimate' : 'Unaccepted Offer'}
                           </span>
                           <div className="flex items-center justify-end gap-1.5">
                             <span className="text-base font-bold text-slate-900">
@@ -240,8 +240,8 @@ export const BookWithReceiptsView: React.FC<BookWithReceiptsViewProps> = ({
                             </span>
                             <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
                           </div>
-                          <span className="text-[10px] text-emerald-700 font-semibold block">
-                            {deal.supportedValue > 0 ? 'Receipt Backed' : '€0 supported'}
+                          <span className="text-[10px] text-slate-500 font-semibold block">
+                            {deal.id === 'b_renewal' ? 'Order form verified' : isECPA ? 'Discovery model' : '€0 supported'}
                           </span>
                         </div>
 

@@ -96,10 +96,16 @@ export const ThinkingDocView: React.FC = () => {
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-            <span className="font-bold text-slate-900 text-sm block">B. Deal Valuation Logic</span>
+            <span className="font-bold text-slate-900 text-sm block">B. Deal Valuation & Financial Provenance Logic</span>
             <p>
-              Pipeline is never calculated by summing nominal quotes. In ECPA, the nominal £350k contract is evaluated at <strong>£136,361</strong> based on the 14 of 18 active docks verified in flight logs. The £200k Tarn Valley expansion is evaluated at <strong>£142,302</strong> because the engineering data-flow blocker is cleared. In Aldermoor, the €140,000 baseline contract is backed, but Stefan's €1.2M claim and unaccepted pitches are isolated as <strong>€0 supported</strong>.
+              Strict separation between executed contracts and discovery estimates:
             </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Signed Contract Baseline:</strong> £350,000 for ECPA and €140,000 for Aldermoor, evidenced by signed order forms (<code className="bg-slate-200 px-1 py-0.5 rounded">contract.txt</code>) and paid invoices.</li>
+              <li><strong>Qualified Discovery Estimates:</strong> £731,440 across 4 ECPA deals is retained as morning discovery qualification modeling, NOT booked revenue. Flight logs, engineering dataflow packs, and helicopter benchmarks are treated as operational blocker evidence, not independent commercial pricing proofs.</li>
+              <li><strong>Nominal Opportunity Ceilings:</strong> £2,300,000 (ECPA framework cap) and €350,000 (Aldermoor full fleet) represent uncommitted maximum ambitions.</li>
+              <li><strong>Customer Claims Isolated:</strong> Stefan Roy’s €1.2M savings claim is classified strictly as an unbacked customer claim (<code className="bg-slate-200 px-1 py-0.5 rounded">CLAIM</code>) with €0 commercial deal value until supported by plant accountant audits.</li>
+            </ul>
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">

@@ -36,3 +36,8 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Runtime dynamic files
+*distributed_lock.json
+.*.tmp
+

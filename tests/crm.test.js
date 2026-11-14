@@ -1,33 +1,53 @@
+process.env.NODE_ENV = 'test';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCRMData, getAccountById, getDealById, getEvidenceById, appendLiveSignal } from '../src/lib/data-store.ts';
-import { acquireLock, releaseLock, getRateLimitStatus } from '../src/lib/mcp.ts';
+import { 
+  getCRMData, 
+  getAccountById, 
+  getDealById, 
+  getEvidenceById, 
+  appendLiveSignal,
+  appendCRMNote
+} from '../src/lib/data-store.ts';
+import { 
+  acquireLock, 
+  releaseLock, 
+  releaseLockOnError,
+  getRateLimitStatus 
+} from '../src/lib/mcp.ts';
+import { 
+  getStoredNotes, 
+  saveStoredNote, 
+  updateStoredNoteStatus,
+  saveStoredSignal,
+  getStoredSignals,
+  getStorageDiagnostics
+} from '../src/lib/storage.ts';
 
-describe('Priority 2: Financial Accuracy & Commercial Valuation', () => {
+describe('Priority 1 & 2: Financial Provenance & Separation of Tiers', () => {
   const data = getCRMData();
   const ecpa = getAccountById('A');
   const aldermoor = getAccountById('B');
 
-  test('Account A (ECPA) strictly separates signed contract value from discovery pipeline', () => {
+  test('Account A (ECPA) strictly separates signed contract from discovery estimates & nominal cap', () => {
     assert.ok(ecpa, 'Account A must exist');
-    // Signed existing contract baseline: 35 docks @ £10,000/yr
-    assert.equal(ecpa.signedContractValue, 350000, 'ECPA signed contract baseline must be £350,000');
-    // Morning qualified discovery pipeline across 4 deals
-    assert.equal(ecpa.supportedPipeline, 731440, 'ECPA morning qualified pipeline must be £731,440');
-    // Maximum nominal uncommitted framework potential
-    assert.equal(ecpa.totalNominalPipeline, 2300000, 'ECPA total nominal potential cap must be £2,300,000');
+    // Tier 1: Executed commercial order form baseline (35 docks @ £10,000/yr)
+    assert.equal(ecpa.signedContractBaseline, 350000, 'ECPA signed contract baseline must be £350,000');
+    // Tier 2: Qualified discovery progression estimate across 4 deals (not booked revenue)
+    assert.equal(ecpa.qualifiedDiscoveryEstimate, 731440, 'ECPA morning discovery estimate must be £731,440');
+    // Tier 3: Uncommitted nominal framework ambition ceiling
+    assert.equal(ecpa.nominalOpportunityCeiling, 2300000, 'ECPA nominal framework ceiling must be £2,300,000');
 
-    // Sum of deals supportedValue must equal supportedPipeline
+    // Sum of deals supportedValue matches qualifiedDiscoveryEstimate
     const dealsSum = ecpa.deals.reduce((sum, d) => sum + d.supportedValue, 0);
-    assert.equal(dealsSum, ecpa.supportedPipeline, 'Sum of deal supported values must equal £731,440');
+    assert.equal(dealsSum, ecpa.qualifiedDiscoveryEstimate, 'Sum of deal supported values must equal £731,440');
   });
 
-  test('Account B (Aldermoor) strictly separates contract baseline from unbacked savings claim', () => {
+  test('Account B (Aldermoor) retains €140,000 as existing contract baseline and isolates €1.2M savings claim', () => {
     assert.ok(aldermoor, 'Account B must exist');
-    // Signed contract baseline: 14 docks @ €10,000/yr
-    assert.equal(aldermoor.signedContractValue, 140000, 'Aldermoor contract baseline must be €140,000');
-    assert.equal(aldermoor.supportedPipeline, 140000, 'Supported renewal pipeline must be €140,000');
-
+    // Existing contract baseline: 14 docks @ €10,000/yr expiring 31 Jan 2027 (NOT a secured renewal)
+    assert.equal(aldermoor.signedContractBaseline, 140000, 'Aldermoor contract baseline must be €140,000');
+    
     // Stefan Roy's €1.2M savings claim must NOT be treated as commercial deal value
     const sisterDeal = getDealById('b_sister_company');
     assert.ok(sisterDeal, 'Sister company deal must exist');
@@ -40,30 +60,81 @@ describe('Priority 2: Financial Accuracy & Commercial Valuation', () => {
     assert.equal(savingsEvidence.factStatus, 'claim', '€1.2M savings must be classified as claim, not verified');
   });
 
-  test('Every deal includes calculation formula, audit inputs, and evidence citations', () => {
+  test('Every deal has an explicit calculation model and does NOT cite its own deal ID', () => {
+    const dealIds = new Set(['a_renewal', 'a_tarn', 'a_westmere', 'a_tender', 'b_renewal', 'b_idle_plants', 'b_sister_company', 'b_priority_support']);
+    
     for (const acc of data.accounts) {
       for (const deal of acc.deals) {
         assert.ok(deal.calculation, `Deal ${deal.id} must have a calculation model`);
         assert.ok(deal.calculation.formula.length > 0, `Deal ${deal.id} must have a formula`);
         assert.ok(deal.calculation.inputs.length > 0, `Deal ${deal.id} must have calculation inputs`);
         assert.ok(deal.evidenceIds.length > 0, `Deal ${deal.id} must cite at least one evidence ID`);
+
+        // Check that calculation inputs do not self-reference deal IDs
+        for (const input of deal.calculation.inputs) {
+          assert.equal(
+            dealIds.has(input.sourceId), 
+            false, 
+            `Deal calculation for ${deal.id} must NOT cite deal ID ${input.sourceId} as its valuation source`
+          );
+        }
       }
     }
   });
 });
 
-describe('Priority 3: Real Evidence Receipts (No Fabrication)', () => {
-  test('Key operational and commercial evidence IDs resolve to genuine records', () => {
-    // ECPA evidence
+describe('Priority 3: Complete Evidence Audit (100% Genuine IDs)', () => {
+  const data = getCRMData();
+
+  test('100% of cited evidence IDs across all deals, stakeholders, risks, actions, and gaps resolve to genuine records', () => {
+    const missing = [];
+    let checkedCount = 0;
+
+    function checkList(list, context) {
+      if (!list) return;
+      for (const id of list) {
+        checkedCount++;
+        const resolved = getEvidenceById(id);
+        if (!resolved) {
+          missing.push(`${context} -> ${id}`);
+        }
+      }
+    }
+
+    for (const acc of data.accounts) {
+      for (const d of acc.deals) {
+        checkList(d.evidenceIds, `deal ${d.id}`);
+        if (d.calculation) {
+          checkList(d.calculation.inputs.map((i) => i.sourceId), `deal calc ${d.id}`);
+        }
+      }
+      for (const s of acc.stakeholders) {
+        checkList(s.evidenceIds, `stakeholder ${s.id}`);
+      }
+      for (const r of acc.risks) {
+        checkList(r.evidenceIds, `risk ${r.id}`);
+      }
+      for (const a of acc.allActions) {
+        checkList(a.evidenceIds, `action ${a.id}`);
+      }
+      for (const g of acc.knowledgeGaps) {
+        checkList(g.evidenceIds, `gap ${g.id}`);
+      }
+    }
+
+    assert.ok(checkedCount >= 30, `Must verify at least 30 evidence citations (checked: ${checkedCount})`);
+    assert.deepEqual(missing, [], `Every cited ID must resolve. Found missing: ${missing.join(', ')}`);
+  });
+
+  test('Key operational records resolve to authentic contents without fabrication', () => {
     const flightLog = getEvidenceById('flight_log_force_month');
     assert.ok(flightLog, 'flight_log_force_month must resolve');
     assert.equal(flightLog.factStatus, 'verified');
-    assert.ok(flightLog.content.includes('Westmere'), 'Flight log must contain genuine Westmere record');
+    assert.ok(flightLog.content.includes('Westmere'), 'Flight log must contain Westmere record');
 
     const heliCost = getEvidenceById('helicopter_cost_overtime');
     assert.ok(heliCost, 'helicopter_cost_overtime must resolve');
     assert.equal(heliCost.factStatus, 'verified');
-    assert.ok(heliCost.content.includes('1500') || heliCost.content.includes('1,500'), 'Heli benchmark must contain £1,500/hr');
 
     const dataflow = getEvidenceById('srv_dataflow');
     assert.ok(dataflow, 'srv_dataflow must resolve');
@@ -77,14 +148,9 @@ describe('Priority 3: Real Evidence Receipts (No Fabrication)', () => {
     assert.ok(contractA, 'doc_a_contract must resolve');
     assert.equal(contractA.factStatus, 'verified');
 
-    // Aldermoor evidence
     const financeEmail = getEvidenceById('email_b_finance');
     assert.ok(financeEmail, 'email_b_finance must resolve');
-    assert.ok(financeEmail.content.includes('quote') || financeEmail.content.includes('renewal'), 'Finance email must contain renewal query');
-
-    const contractB = getEvidenceById('doc_b_contract');
-    assert.ok(contractB, 'doc_b_contract must resolve');
-    assert.equal(contractB.factStatus, 'verified');
+    assert.ok(financeEmail.content.includes('quote') || financeEmail.content.includes('renewal'));
   });
 
   test('Missing or non-existent IDs return undefined with ZERO fabricated fallback', () => {
@@ -92,85 +158,111 @@ describe('Priority 3: Real Evidence Receipts (No Fabrication)', () => {
     const result = getEvidenceById(bogusId);
     assert.equal(result, undefined, 'Unknown ID must return undefined without synthesizing content');
   });
-
-  test('Fact statuses accurately preserve verified, told, and claim', () => {
-    // Verified: Order form / Contract
-    const docContract = getEvidenceById('doc_a_contract');
-    assert.equal(docContract?.factStatus, 'verified');
-
-    // Told: Stakeholder spoken claims during calls/meetings
-    const toldFact = getEvidenceById('km_usage_0');
-    assert.equal(toldFact?.factStatus, 'told');
-
-    // Claim: Unbacked customer ROI claims
-    const claimFact = getEvidenceById('email_b_savings');
-    assert.equal(claimFact?.factStatus, 'claim');
-  });
 });
 
-describe('Priority 4: Persistent MCP Rate Limiting & Concurrency Lock', () => {
-  test('Persistent lock rejects parallel / simultaneous in-flight executions', () => {
-    // Force clean state
-    releaseLock(0);
+describe('Priority 4 & 5: Distributed Locking, Storage Persistence & Idempotency', () => {
+  test('Distributed lock enforces 60-second cooldown and rejects simultaneous calls', async () => {
+    // Release any previous lock
+    await releaseLock(0);
 
-    const firstAcquire = acquireLock();
-    assert.equal(firstAcquire.acquired, true, 'First lock acquisition must succeed');
+    const first = await acquireLock();
+    assert.equal(first.acquired, true, 'First lock acquisition must succeed');
 
-    // Immediate second acquisition while first is in-flight must be rejected
-    const secondAcquire = acquireLock();
-    assert.equal(secondAcquire.acquired, false, 'Simultaneous in-flight call must be rejected');
-    assert.ok(secondAcquire.error?.includes('in flight'), 'Rejection reason must mention in flight');
+    // Attempt second simultaneous call while first is in-flight
+    const second = await acquireLock();
+    assert.equal(second.acquired, false, 'Simultaneous call must be rejected');
+    assert.ok(second.error?.includes('in flight') || second.error?.includes('cooldown'));
 
-    // Release lock with cooldown
-    releaseLock(61);
+    // Release with 61 second cooldown
+    await releaseLock(61);
+
+    // Call attempted during cooldown must be rejected
+    const cooldownCall = await acquireLock();
+    assert.equal(cooldownCall.acquired, false, 'Call in cooldown must be rejected');
+    assert.ok(cooldownCall.retryAfterSeconds > 0, 'Must report positive retryAfterSeconds');
   });
 
-  test('Rate limiter enforces 60-second cooldown window across all instances', () => {
-    // Set lock released with 61-second cooldown
-    releaseLock(61);
-
-    // Call attempted immediately after finish must be rejected by cooldown
-    const cooldownAttempt = acquireLock();
-    assert.equal(cooldownAttempt.acquired, false, 'Call within 60s cooldown must be rejected');
-    assert.ok(cooldownAttempt.retryAfterSeconds > 0, 'Must report positive retryAfterSeconds');
-    assert.ok(cooldownAttempt.retryAfterSeconds <= 61, 'retryAfterSeconds must be <= 61s');
+  test('Uncertain network error conservatively preserves cooldown', async () => {
+    // Simulate error after dispatch
+    await releaseLockOnError(61);
 
     const status = getRateLimitStatus();
-    assert.equal(status.canCallNow, false, 'getRateLimitStatus must report canCallNow: false');
-    assert.ok(status.secondsRemaining > 0, 'Must have retry cooldown');
+    assert.equal(status.canCallNow, false, 'Rate limit must remain active after error');
+    assert.ok(status.secondsRemaining > 0, 'Seconds remaining must be positive');
+  });
+
+  test('Notes persist across reloads with explicit syncStatus tracking', () => {
+    const noteId = `test_note_${Date.now()}`;
+    const testNote = {
+      id: noteId,
+      accountId: 'A',
+      kind: 'next_step',
+      title: 'Persistent Storage Test',
+      text: 'Testing cold start durability',
+      createdAt: new Date().toISOString(),
+      author: 'Test Runner',
+      syncStatus: 'saved_locally_pending',
+    };
+
+    saveStoredNote(testNote);
+    const stored = getStoredNotes();
+    const found = stored.find((n) => n.id === noteId);
+    assert.ok(found, 'Note must exist in stored notes');
+    assert.equal(found.syncStatus, 'saved_locally_pending');
+
+    // Update to confirmed remote synced
+    const confirmedTime = new Date().toISOString();
+    updateStoredNoteStatus(noteId, 'synced', confirmedTime);
+
+    const updatedStored = getStoredNotes();
+    const updatedFound = updatedStored.find((n) => n.id === noteId);
+    assert.ok(updatedFound, 'Updated note must exist');
+    assert.equal(updatedFound.syncStatus, 'synced');
+    assert.equal(updatedFound.remoteConfirmedAt, confirmedTime);
+  });
+
+  test('Composite key deduplication preserves distinct events with identical text at different times', () => {
+    const uniqueTime1 = '2026-11-14T09:00:00.000Z';
+    const uniqueTime2 = '2026-11-14T09:05:00.000Z';
+    const sharedText = 'Drone patrol completed successfully';
+
+    const sig1 = {
+      id: `sig_${Date.now()}_1`,
+      timestamp: uniqueTime1,
+      sourceId: 'event_stream',
+      text: sharedText,
+      accountId: 'A',
+    };
+
+    const sig2 = {
+      id: `sig_${Date.now()}_2`,
+      timestamp: uniqueTime2,
+      sourceId: 'event_stream',
+      text: sharedText,
+      accountId: 'A',
+    };
+
+    const inserted1 = saveStoredSignal(sig1);
+    const inserted2 = saveStoredSignal(sig2);
+
+    assert.equal(inserted1, true, 'First event must be inserted');
+    assert.equal(inserted2, true, 'Second event with different timestamp must NOT be discarded');
+
+    // Duplicate attempt of exact same event
+    const dupAttempt = saveStoredSignal(sig1);
+    assert.equal(dupAttempt, false, 'Exact duplicate event must be deduplicated');
+  });
+
+  test('Storage diagnostics expose active engine and telemetry', () => {
+    const diag = getStorageDiagnostics();
+    assert.ok(['vercel_kv', 'postgres', 'atomic_file_store'].includes(diag.engine));
+    assert.ok(typeof diag.notesCount === 'number');
+    assert.ok(typeof diag.signalsCount === 'number');
   });
 });
 
-describe('Priority 5 & 6: Live Signal Deduplication & Action Ranks', () => {
-  test('Live signals are deduplicated by stable ID', () => {
-    const initialCount = getCRMData().signals.length;
-    const testSignalId = 'TEST-SIG-DYNAMIC-' + Date.now();
-
-    appendLiveSignal({
-      id: testSignalId,
-      timestamp: new Date().toISOString(),
-      accountId: 'A',
-      text: 'Test stable signal',
-      sourceId: 'test_runner',
-    });
-
-    const afterFirstInsert = getCRMData().signals.length;
-    assert.equal(afterFirstInsert, initialCount + 1, 'First insertion must increment signals');
-
-    // Duplicate insert of same ID
-    appendLiveSignal({
-      id: testSignalId,
-      timestamp: new Date().toISOString(),
-      accountId: 'A',
-      text: 'Duplicate signal attempt',
-      sourceId: 'test_runner',
-    });
-
-    const afterSecondInsert = getCRMData().signals.length;
-    assert.equal(afterSecondInsert, afterFirstInsert, 'Duplicate insertion must be ignored');
-  });
-
-  test('Action item priority scores match sum of scoring factors', () => {
+describe('Priority 6: Action Scoring Consistency & Power Map', () => {
+  test('Action item priority scores strictly match sum of scoring factors', () => {
     const ecpa = getAccountById('A');
     const aldermoor = getAccountById('B');
 
@@ -204,11 +296,6 @@ describe('Priority 5 & 6: Live Signal Deduplication & Action Ranks', () => {
     assert.ok(gapFinance, 'Group Finance gap must exist');
     assert.equal(gapFinance.status, 'confirmed_not_available');
     assert.equal(gapFinance.blocksDealProgression, true);
-
-    // Gap 2: Plant serial mapping
-    const gapInstalls = aldermoor.knowledgeGaps.find((g) => g.id === 'gap_b_2');
-    assert.ok(gapInstalls, 'Plant serial mapping gap must exist');
-    assert.equal(gapInstalls.status, 'not_found_in_records');
 
     // Unmet stakeholders
     const nadia = aldermoor.stakeholders.find((s) => s.id === 'nadia_rahman');

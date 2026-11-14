@@ -44,8 +44,11 @@ export interface Deal {
   accountId: string;
   name: string;
   currency: string;
+  contractBaselineValue?: number; // Verified order form baseline revenue
+  discoveryEstimateValue?: number; // Morning discovery qualified progression estimate
+  nominalCeilingValue?: number; // Maximum uncommitted framework or expansion potential
   nominalValue: number; // e.g. worth_up_to or contract value
-  supportedValue: number; // evidenced value or qualified progression value
+  supportedValue: number; // evidenced contract baseline or qualified discovery estimate
   unsupportedValue: number; // unevidenced amount
   stage: DealStage;
   statusText: string;
@@ -156,9 +159,13 @@ export interface AccountData {
   officialStory: string;
   sector: string;
   currency: string;
-  signedContractValue: number; // Contract baseline revenue verified by order form
-  futurePipelineEstimate: number; // Qualified deals in discovery
-  supportedPipeline: number;
+  signedContractBaseline: number; // Existing signed contract revenue verified by order form
+  qualifiedDiscoveryEstimate: number; // Sum of morning discovery qualified deal valuations
+  nominalOpportunityCeiling: number; // Maximum uncommitted framework / expansion ceiling
+  unbackedCustomerClaims: number; // Unbacked claims (e.g. €1.2M savings claim)
+  signedContractValue: number; // Legacy alias for signedContractBaseline
+  futurePipelineEstimate: number; // Legacy alias for qualifiedDiscoveryEstimate
+  supportedPipeline: number; // Disambiguated in UI: displays discovery estimate with explicit labels
   unbackedPipeline: number;
   totalNominalPipeline: number;
   deals: Deal[];
@@ -203,7 +210,9 @@ export interface CRMNote {
   text: string;
   createdAt: string;
   author: string;
-  syncStatus?: 'synced' | 'saved_locally_pending';
+  syncStatus?: 'synced' | 'saved_locally_pending' | 'pending_retry';
+  remoteConfirmedAt?: string;
+  remoteError?: string;
 }
 
 export interface EvidenceRecord {

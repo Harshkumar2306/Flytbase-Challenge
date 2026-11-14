@@ -31,7 +31,7 @@ flowchart LR
 - **Screen:** Click on **"Eastern Counties Police Alliance"** (or use the sidebar tabs).
 - **Spoken Script:**
   > *"Here are the five management answers for ECPA on Monday morning:*
-  > 1. ***What is the book worth?*** *Signed contract baseline is £350,000 verified by order forms. Morning discovery qualified pipeline is £731,440 across four deals. The nominal £2.3 million potential is shown separately, isolating £1.57 million of unbacked framework ambitions.*
+  > 1. ***What is the book worth?*** *Signed contract baseline is £350,000 verified by order forms. Morning discovery qualified estimate is £731,440 across four deals, with flight logs and benchmarks serving as operational blocker evidence, not pricing proofs. The nominal £2.3 million potential is shown separately, isolating £1.57 million of uncommitted framework ambitions.*
   > 2. ***Who holds the power?*** *Rhys Calder is our ally and programme lead, but he cannot approve spending — each force signs its own call-off. Ewan Brooks holds the budget for Metro Central; Fatima Osei holds the compliance gate for Tarn Valley.*
   > 3. ***What do we do first?*** *Our Monday 9am action plan ranks delivering the engineering data-flow pack to Fatima Osei first (Score 95/100) to unlock £142,302.*
   > 4. ***What is about to go wrong?*** *Metro Central's autumn finance window closes in 8 moves. If Ewan doesn't get the helicopter cost comparison in time, capital funding is lost for FY27.*
@@ -64,7 +64,7 @@ flowchart LR
   - Text: `Dispatching data-flow pack to Fatima Osei for DPIA review.`
   - Click **"Preview & Confirm Dispatch"**, then confirm.
 - **Spoken Script:**
-  > *"The system stays live without code changes. The 'Sync MCP' button queries `get_signals` and `whoami` while enforcing the 1-call-per-minute rate limit. And under 'Notes & Tasks', we can write directly back to Questathon using the `write_note` tool. Notice the confirmation modal before dispatch to prevent duplicate calls."*
+  > *"The system stays live without code changes through manual sync that queries get_signals while enforcing the distributed 1-call-per-minute rate limit lock. Under Notes & Tasks, writes are tracked with explicit sync status, distinguishing confirmed remote writes from locally saved notes, with cold-start persistence across restarts."*
 
 ---
 

@@ -29,9 +29,10 @@ Every claim in the CRM carries an evidentiary badge:
 
 #### B. Deal Valuation & Financial Provenance Rules
 - **Signed Existing Contracts:** Verified by executed order forms (`contract.txt`) and paid invoices (£350,000 for ECPA across 35 docks; €140,000 for Aldermoor across 14 docks).
-- **Qualified Morning Pipeline:** Sum of qualified deals during discovery (£731,440 across 4 deals: Renewal £136,361 based on 14 active docks flying in flight logs; Tarn Valley £142,302 following engineering dataflow clearance; Westmere expansion £93,217; 300-dock framework £359,560).
+- **Qualified Morning Discovery Estimates:** £731,440 across 4 deals represents discovery qualification modeling from the morning session, NOT booked revenue. Flight logs, engineering dataflow packs, and helicopter benchmarks are treated as operational blocker evidence, not commercial pricing proofs.
 - **Nominal Opportunity Caps:** £2,300,000 (ECPA framework cap) and €350,000 (Aldermoor 35-plant fleet potential) are categorized strictly as nominal uncommitted ceilings (`worth_up_to`).
-- **Unbacked Customer Claims:** In Aldermoor, Stefan Roy's €1.2M savings statement is classified strictly as an unbacked customer claim with €0 commercial deal value until supported by plant accountant audits. Operational flight logs and helicopter benchmarks are presented as operational evidence, never confused for commercial pricing calculations.
+- **Unbacked Customer Claims:** In Aldermoor, Stefan Roy's €1.2M savings statement is classified strictly as an unbacked customer claim with €0 commercial deal value until supported by plant accountant audits.
+- **Aldermoor Contract Baseline:** €140,000 is an existing annual contract baseline (14 docks @ €10k) expiring 31 Jan 2027, NOT a secured renewal. Renewal is actively blocked pending a plant-by-plant quote breakdown requested by Group Finance.
 
 #### C. Stakeholder Authority Rules
 - **Champion ≠ Budget Payer:** Rhys Calder is an ardent ally, but cannot approve spending; each member force signs its own call-off (`rc_funding_2`).
@@ -51,7 +52,8 @@ $$\text{Priority Score (0--100)} = \text{Deal Value Weight (30)} + \text{Deadlin
 1. **No Invented Win Probabilities:** Where conversion data is absent, the system displays *"Insufficient evidence to estimate"* rather than generating speculative percentages.
 2. **No Inferred Dock Locations:** The customer success records omitted per-force and per-plant dock serial locations (flagged as high-priority blind spots).
 3. **No Unilateral Claim Promotion:** Stefan Roy's €1.2M savings claim remains flagged as an unbacked claim until plant finance managers supply audited guard replacement logs.
-4. **Rate Limit Buffering:** Respects the Questathon 1-call-per-minute token rate limit; updates are safely queued and persisted locally during cooldowns.
+4. **Distributed Rate Limiting & Persistence:** Rate limits are enforced via distributed atomic locking (supporting Vercel KV REST, Postgres, or atomic file stores), with conservative reservation before dispatch to prevent duplicate calls on network drops. Live sync is triggered manually via `get_signals` to preserve quota.
+5. **Cold-Start Durability:** Confirmed remote writes and locally pending notes are stored with explicit sync status, persisting across cold starts.
 
 ---
 

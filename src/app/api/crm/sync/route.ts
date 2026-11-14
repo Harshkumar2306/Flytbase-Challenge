@@ -36,8 +36,12 @@ export async function POST() {
       let addedCount = 0;
 
       for (const sig of incoming) {
-        // Derive stable ID from signal attributes (never random UUID)
-        const stableId = String(sig.id || sig.signal_id || (sig.text ? `sig_${Buffer.from(sig.text).toString('hex').slice(0, 16)}` : ''));
+        // Prefer actual stable source ID or composite key with timestamp & source
+        const stableId = sig.id
+          ? String(sig.id)
+          : (sig.signal_id
+              ? String(sig.signal_id)
+              : `${sig.sourceId || 'get_signals'}_${sig.timestamp || new Date().toISOString()}_${sig.account || sig.accountId || 'portfolio'}`);
         if (!stableId) continue;
 
         const exists = current.signals.some((s) => s.id === stableId);

@@ -29,6 +29,7 @@ export const NotesTasksView: React.FC<NotesTasksViewProps> = ({
   const [kind, setKind] = useState<'note' | 'task' | 'risk' | 'next_step'>('next_step');
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
+  const [filterSync, setFilterSync] = useState<'all' | 'synced' | 'pending'>('all');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -36,6 +37,14 @@ export const NotesTasksView: React.FC<NotesTasksViewProps> = ({
     message: string;
     details?: string;
   } | null>(null);
+
+  const syncedNotes = notes.filter((n) => n.syncStatus === 'synced');
+  const pendingNotes = notes.filter((n) => n.syncStatus !== 'synced');
+  const displayedNotes = filterSync === 'synced'
+    ? syncedNotes
+    : filterSync === 'pending'
+    ? pendingNotes
+    : notes;
 
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,22 +240,49 @@ export const NotesTasksView: React.FC<NotesTasksViewProps> = ({
 
         {/* Right: Notes History (7 cols) */}
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col h-[560px]">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-900 text-sm">
-              Recorded Notes & Tasks Journal ({notes.length})
-            </h2>
-            <span className="text-[11px] font-mono text-slate-500">
-              Questathon MCP Verified
-            </span>
+          <div className="px-6 py-3 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="font-bold text-slate-900 text-sm">
+                Notes & Tasks Journal ({notes.length})
+              </h2>
+              <span className="text-[10px] text-slate-500">
+                {syncedNotes.length} confirmed remote • {pendingNotes.length} locally saved
+              </span>
+            </div>
+
+            {/* Sync Filter Toggle */}
+            <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-lg text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setFilterSync('all')}
+                className={`px-2 py-1 rounded transition-colors ${filterSync === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                All ({notes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterSync('synced')}
+                className={`px-2 py-1 rounded transition-colors ${filterSync === 'synced' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-emerald-800 hover:text-emerald-950'}`}
+              >
+                Confirmed Synced ({syncedNotes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterSync('pending')}
+                className={`px-2 py-1 rounded transition-colors ${filterSync === 'pending' ? 'bg-amber-500 text-white shadow-2xs' : 'text-amber-800 hover:text-amber-950'}`}
+              >
+                Pending ({pendingNotes.length})
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-6 space-y-4">
-            {notes.length === 0 ? (
+            {displayedNotes.length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-xs">
-                No notes or tasks written yet. Use the form on the left to write back to Questathon.
+                No notes in this view. Use the form on the left to record updates.
               </div>
             ) : (
-              notes.map((n) => (
+              displayedNotes.map((n) => (
                 <div key={n.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -266,9 +302,22 @@ export const NotesTasksView: React.FC<NotesTasksViewProps> = ({
                       </span>
                     </div>
 
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(n.createdAt).toLocaleString()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {n.syncStatus === 'synced' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Remote Synced (MCP)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          Locally Saved / Pending
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(n.createdAt).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </div>
 
                   <p className="text-slate-700 leading-relaxed">

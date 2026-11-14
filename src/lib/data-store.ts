@@ -13,6 +13,12 @@ import type {
   EvidenceRecord,
   FactStatus 
 } from '../types/crm';
+import { 
+  getStoredNotes, 
+  saveStoredNote, 
+  getStoredSignals, 
+  saveStoredSignal 
+} from './storage.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const TMP_DIR = '/tmp';
@@ -100,6 +106,28 @@ export function loadNormalizedCRMData() {
       verifiedBy: f.verified_by,
       learnedAtMinute: f.learned_at_minute,
     };
+  });
+
+  // Index raw opportunities and offers from exportData
+  exportData.accounts?.forEach((acc: any) => {
+    acc.opportunities?.forEach((opp: any) => {
+      evidenceMap[opp.id] = {
+        id: opp.id,
+        sourceType: 'paperwork',
+        sourceTitle: `Opportunity Handover Record: ${opp.title}`,
+        content: `Opportunity ID: ${opp.id}\nTitle: ${opp.title}\nStage: ${opp.stage}\nNominal Ceiling (worth_up_to): £${opp.worth_up_to || 0}\nBlocker: ${opp.blocker?.text || 'None'}\nEvidence on Handover: ${(opp.evidence || []).join(', ')}`,
+        factStatus: 'told',
+      };
+    });
+    acc.offers?.forEach((off: any) => {
+      evidenceMap[off.id] = {
+        id: off.id,
+        sourceType: 'paperwork',
+        sourceTitle: `Commercial Pitch Offer: ${off.title}`,
+        content: `Offer ID: ${off.id}\nTitle: ${off.title}\nNominal Pitch Value: ${acc.id === 'A' ? '£' : '€'}${off.value}\nPitch Target: ${off.pitch_to}\nStatus: ${off.status}\nAudit Classification: Sales pitch offer; €0 contracted.`,
+        factStatus: 'claim',
+      };
+    });
   });
 
   // 2. Index real files from data/files/
@@ -257,10 +285,10 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_0', 'rc_appetite_2', 'km_usage_1', 'km_value_2', 'flight_log_force_month', 'doc_a_contract'],
       evidenceItems: [],
       calculation: {
-        formula: 'Morning Discovery Qualified Potential (Opp: a_renewal)',
+        formula: 'Contract Baseline: £350,000/yr (doc_a_contract) | Morning Discovery Qualified Value: £136,361',
         inputs: [
-          { label: 'Baseline Contract Value', value: '£350,000/yr (35 docks)', sourceId: 'doc_a_contract', factStatus: 'verified' },
-          { label: 'Morning Discovery Qualified Value', value: '£136,361 (Qualified stage estimate)', sourceId: 'a_renewal', factStatus: 'told' },
+          { label: 'Baseline Contract Value', value: '£350,000/yr (35 docks @ £10k/dock/yr)', sourceId: 'doc_a_contract', factStatus: 'verified' },
+          { label: 'Morning Discovery Qualified Value', value: '£136,361 (Qualified stage estimate)', sourceId: 'rc_appetite_0', factStatus: 'told' },
           { label: 'Operational Activity Proof', value: '14 of 18 docks active in Westmere; Tarn Valley/Norwold inactive', sourceId: 'km_usage_1', factStatus: 'verified' },
           { label: 'Remaining Unbacked Pipeline', value: '£213,639 (Subject to inactive force renewal)', sourceId: 'rc_appetite_2', factStatus: 'told' },
         ],
@@ -295,10 +323,10 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_appetite_2', 'km_others_2', 'fo_dpia_2', 'fo_needs_3', 'pj_ticket', 'srv_dataflow', 'support_ticket_history', 'dataflow_pack'],
       evidenceItems: [],
       calculation: {
-        formula: 'Morning Discovery Qualified Potential (Opp: a_tarn)',
+        formula: 'Nominal Opportunity Cap: £200,000 (rc_appetite_2) | Morning Discovery Qualified Value: £142,302',
         inputs: [
-          { label: 'Nominal Opportunity Cap', value: '£200,000 (worth_up_to)', sourceId: 'a_tarn', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£142,302 (Blocker cleared stage)', sourceId: 'a_tarn', factStatus: 'told' },
+          { label: 'Nominal Opportunity Cap', value: '£200,000 (worth_up_to ceiling)', sourceId: 'rc_appetite_2', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£142,302 (Blocker cleared stage)', sourceId: 'fo_dpia_2', factStatus: 'told' },
           { label: 'Blocker Clearance Proof', value: 'Dataflow pack produced by Engineering', sourceId: 'srv_dataflow', factStatus: 'verified' },
         ],
         explanation: 'Nominal opportunity cap is £200,000. In the morning session, £142,302 was qualified with blocker cleared. SRV (Director of Engineering) committed data-flow documentation (dataflow_pack.txt) resolving the 4-month support desk ticket backlog (FB-10412).',
@@ -332,11 +360,11 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['km_staff_2', 'km_value_2', 'eb_heli_1', 'eb_drone_2', 'eb_sign_2', 'helicopter_cost_overtime', 'flight_log_force_month'],
       evidenceItems: [],
       calculation: {
-        formula: 'Morning Discovery Qualified Potential (Opp: a_westmere)',
+        formula: 'Nominal Cap: £250,000 (km_value_2) | Morning Discovery Qualified Value: £93,217',
         inputs: [
-          { label: 'Nominal Opportunity Cap', value: '£250,000 (worth_up_to)', sourceId: 'a_westmere', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£93,217 (Qualified stage estimate)', sourceId: 'a_westmere', factStatus: 'told' },
-          { label: 'Helicopter Cost Benchmark', value: '£1,500/hr all-in benchmark', sourceId: 'eb_heli_1', factStatus: 'verified' },
+          { label: 'Nominal Opportunity Cap', value: '£250,000 (worth_up_to ceiling)', sourceId: 'km_value_2', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£93,217 (Qualified stage estimate)', sourceId: 'eb_drone_2', factStatus: 'told' },
+          { label: 'Helicopter Cost Benchmark', value: '£1,500/hr all-in benchmark', sourceId: 'helicopter_cost_overtime', factStatus: 'verified' },
         ],
         explanation: 'Nominal opportunity cap is £250,000; morning progression estimate is £93,217. Ewan Brooks requires helicopter hour cost comparison (£1,500/hr in helicopter_cost_overtime.csv) before Chief Finance Officer can approve call-off inclusion in the autumn finance round.',
       },
@@ -368,10 +396,10 @@ export function loadNormalizedCRMData() {
       evidenceIds: ['rc_tender_2', 'hd_calloff_2', 'rc_funding_2', 'eb_sign_2', 'km_staff_2'],
       evidenceItems: [],
       calculation: {
-        formula: 'Morning Discovery Qualified Potential (Opp: a_tender)',
+        formula: 'Nominal Framework Cap: £1,500,000 (rc_tender_2) | Morning Discovery Qualified Value: £359,560',
         inputs: [
-          { label: 'Nominal Framework Ambition', value: '£1,500,000 (worth_up_to)', sourceId: 'a_tender', factStatus: 'told' },
-          { label: 'Morning Discovery Value', value: '£359,560 (Qualified base position)', sourceId: 'a_tender', factStatus: 'told' },
+          { label: 'Nominal Framework Ambition', value: '£1,500,000 (worth_up_to ceiling)', sourceId: 'rc_tender_2', factStatus: 'told' },
+          { label: 'Morning Discovery Value', value: '£359,560 (Qualified base position)', sourceId: 'hd_calloff_2', factStatus: 'told' },
           { label: 'Multi-Force Funding Reality', value: 'No pooled budget; each force must fund call-offs', sourceId: 'rc_funding_2', factStatus: 'told' },
         ],
         explanation: 'Total 300-dock framework opportunity is capped nominally at £1,500,000; morning qualification baseline is £359,560. Rhys Calder confirmed there is no pooled budget; each force Chief Finance Officer must sign its own call-off order (hd_calloff_2).',
@@ -727,13 +755,13 @@ export function loadNormalizedCRMData() {
         status: 'open',
       },
       deadline: null,
-      evidenceIds: ['doc_b_profile'],
+      evidenceIds: ['doc_b_profile', 'doc_b_contract'],
       evidenceItems: [],
       calculation: {
         formula: 'Unaccepted Internal Offer Pitch (€160,000 nominal)',
         inputs: [
-          { label: 'Internal Offer Value', value: '€160,000 (Plant 15 & 2 idle plants)', sourceId: 'b_more_plants', factStatus: 'claim' },
-          { label: 'Verified Commercial Commitment', value: '€0 (No signed order or qualified budget)', sourceId: 'doc_b_profile', factStatus: 'unknown' },
+          { label: 'Internal Offer Value', value: '€160,000 (Plant 15 & 2 idle plants pitch)', sourceId: 'doc_b_profile', factStatus: 'claim' },
+          { label: 'Verified Commercial Commitment', value: '€0 (No signed order or qualified budget)', sourceId: 'doc_b_contract', factStatus: 'verified' },
         ],
         explanation: 'Offer was drafted internally for Stefan Roy but never qualified or agreed. Counted as €0 supported pipeline to preserve financial integrity.',
       },
@@ -817,13 +845,13 @@ export function loadNormalizedCRMData() {
         status: 'open',
       },
       deadline: null,
-      evidenceIds: ['ticket_b_beatriz'],
+      evidenceIds: ['ticket_b_beatriz', 'doc_b_profile'],
       evidenceItems: [],
       calculation: {
         formula: 'Unaccepted Internal Offer Pitch (€50,000 nominal)',
         inputs: [
-          { label: 'Internal Offer Value', value: '€50,000', sourceId: 'b_priority_support', factStatus: 'claim' },
-          { label: 'Customer Commitment', value: '€0', sourceId: 'ticket_b_beatriz', factStatus: 'told' },
+          { label: 'Internal Offer Value', value: '€50,000', sourceId: 'doc_b_profile', factStatus: 'claim' },
+          { label: 'Customer Commitment', value: '€0 (Support ticket FB-10944 closed without commercial discovery)', sourceId: 'ticket_b_beatriz', factStatus: 'told' },
         ],
         explanation: 'Beatriz Alonso asked about night alert routing. Customer success closed the ticket with a PDF without exploring operational support packages.',
       },
@@ -1161,6 +1189,10 @@ export function loadNormalizedCRMData() {
     officialStory: 'Rollout under way. 4 forces, 35 docks, 300-dock framework tender in preparation.',
     sector: 'Public Safety & Law Enforcement',
     currency: 'GBP',
+    signedContractBaseline: 350000,
+    qualifiedDiscoveryEstimate: 731440,
+    nominalOpportunityCeiling: 2300000,
+    unbackedCustomerClaims: 0,
     signedContractValue: 350000,
     futurePipelineEstimate: 731440,
     supportedPipeline: 731440,
@@ -1183,6 +1215,10 @@ export function loadNormalizedCRMData() {
     officialStory: '14 docks deployed for perimeter night security. Contract expires January 2027.',
     sector: 'Industrial Manufacturing & Critical Infrastructure',
     currency: 'EUR',
+    signedContractBaseline: 140000,
+    qualifiedDiscoveryEstimate: 0,
+    nominalOpportunityCeiling: 350000,
+    unbackedCustomerClaims: 1200000,
     signedContractValue: 140000,
     futurePipelineEstimate: 0,
     supportedPipeline: 140000,
@@ -1199,8 +1235,8 @@ export function loadNormalizedCRMData() {
     notOnFile: paperworkB.records?.find((r: any) => r.kind === 'profile')?.data?.not_on_file || [],
   };
 
-  const parsedSignals: LiveSignal[] = signalsData.signals || [];
-  const parsedNotes: CRMNote[] = notesData.notes || [];
+  const parsedSignals: LiveSignal[] = getStoredSignals();
+  const parsedNotes: CRMNote[] = getStoredNotes();
 
   cachedCRMData = {
     accounts: [accountA, accountB],
@@ -1216,9 +1252,14 @@ export function loadNormalizedCRMData() {
 
 export function getCRMData() {
   if (!cachedCRMData) {
-    return loadNormalizedCRMData();
+    loadNormalizedCRMData();
   }
-  return cachedCRMData;
+  // Keep signals and notes in sync with durable persistent storage
+  if (cachedCRMData) {
+    cachedCRMData.signals = getStoredSignals();
+    cachedCRMData.notes = getStoredNotes();
+  }
+  return cachedCRMData!;
 }
 
 export function getAccountById(id: string): AccountData | undefined {
@@ -1244,20 +1285,17 @@ export function getEvidenceById(id: string): EvidenceReference | undefined {
 }
 
 export function appendLiveSignal(signal: LiveSignal) {
-  const data = getCRMData();
-  // Deduplicate by stable ID
-  const exists = data.signals.some((s) => s.id === signal.id);
-  if (!exists) {
-    data.signals.unshift(signal);
-    writeJsonFileSafely('signals.json', { signals: data.signals });
+  // Durable storage with composite key deduplication
+  saveStoredSignal(signal);
+  if (cachedCRMData) {
+    cachedCRMData.signals = getStoredSignals();
   }
 }
 
 export function appendCRMNote(note: CRMNote) {
-  const data = getCRMData();
-  const exists = data.notes.some((n) => n.id === note.id);
-  if (!exists) {
-    data.notes.unshift(note);
-    writeJsonFileSafely('notes.json', { notes: data.notes });
+  // Durable storage with retry and sync status tracking
+  saveStoredNote(note);
+  if (cachedCRMData) {
+    cachedCRMData.notes = getStoredNotes();
   }
 }

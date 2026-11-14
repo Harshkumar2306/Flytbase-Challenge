@@ -186,34 +186,34 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Pipeline summary */}
+              {/* Financial Provenance Tiers */}
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200/80">
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                    Supported Pipeline
+                    Signed Contract Baseline
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="text-lg font-bold text-slate-900">
-                      £{accountA.supportedPipeline.toLocaleString()}
+                      £{accountA.signedContractBaseline?.toLocaleString() || '350,000'}
                     </span>
                     <EvidenceBadge status="verified" />
                   </div>
                   <span className="text-[10px] text-slate-500">
-                    Backed by logs & cleared blockers
+                    Order form (35 docks) & invoices
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                    Unsupported Potential
+                    Discovery Qualified Estimates
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-lg font-bold text-slate-400">
-                      £{accountA.unbackedPipeline.toLocaleString()}
+                    <span className="text-lg font-bold text-blue-700">
+                      £{accountA.qualifiedDiscoveryEstimate?.toLocaleString() || '731,440'}
                     </span>
-                    <EvidenceBadge status="claim" />
+                    <EvidenceBadge status="told" />
                   </div>
-                  <span className="text-[10px] text-slate-400">
-                    Speculative framework & stadium
+                  <span className="text-[10px] text-slate-500">
+                    4-deal discovery estimate; not booked revenue
                   </span>
                 </div>
               </div>
@@ -319,34 +319,34 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Pipeline summary */}
+              {/* Financial Provenance Tiers */}
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200/80">
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                    Supported Baseline
+                    Existing Contract Baseline
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="text-lg font-bold text-slate-900">
-                      €{accountB.supportedPipeline.toLocaleString()}
+                      €{accountB.signedContractBaseline?.toLocaleString() || '140,000'}
                     </span>
                     <EvidenceBadge status="verified" />
                   </div>
                   <span className="text-[10px] text-slate-500">
-                    Annual contract (14 docks)
+                    Order form (14 docks); expires 31 Jan 2027
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                    Unbacked Claims / Offers
+                    Unbacked Customer Claim
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-lg font-bold text-slate-400">
-                      €{accountB.unbackedPipeline.toLocaleString()}
+                    <span className="text-lg font-bold text-amber-700">
+                      €1.2M Savings
                     </span>
                     <EvidenceBadge status="claim" />
                   </div>
                   <span className="text-[10px] text-slate-400">
-                    €1.2M ROI claim & idle plant pitch
+                    Stefan Roy email; €0 commercial revenue
                   </span>
                 </div>
               </div>
