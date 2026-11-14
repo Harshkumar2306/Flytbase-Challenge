@@ -23,9 +23,11 @@ Instead of optimistic promises, this CRM functions as an **evidence-driven decis
 
 ### 3. What It Does Not Do Yet (Honest Boundaries)
 - **No Inferred Win Rates or Values:** When conversion or pricing records are missing, the CRM marks them as unbacked rather than guessing numbers.
+- **Fixed Morning Discovery Estimates:** The four ECPA pipeline values (£136k, £142k, £93k, £360k) were qualified during the Questathon morning simulation. They are deterministic constants from that session, not dynamically recalculated from raw records.
+- **Deterministic Action Plans:** Priority scores use a fixed formula with explicit factor weights prepared at morning discovery. Ranks are set at build time, not re-ranked from live data.
 - **No Fabricated Locations:** Omitted per-plant dock serials are flagged as high-priority blind spots rather than simulated.
 - **Zero Token Bypass:** Adheres strictly to the 1-call/min rate limit using distributed atomic reservation (Vercel KV when configured, atomic file lock fallback).
-- **Polling vs. Webhooks:** Ingests live signals via 65-second client-driven polling rather than server-push webhooks.
+- **Client Polling, Not Server Push:** Ingests live signals via 65-second browser-driven polling. Stops when the tab closes. Not a background server job.
 
 ### 4. How AI Was Used
 AI acted as a deterministic software engineering accelerator, not a generative content creator:

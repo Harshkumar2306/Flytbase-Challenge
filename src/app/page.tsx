@@ -29,6 +29,11 @@ export default function DashboardPage() {
   const [evidenceExplorerRecords, setEvidenceExplorerRecords] = useState<EvidenceRecord[]>([]);
   const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceReference>>({});
 
+  // Sync status telemetry (Priority 5: polling error visibility)
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [nextSyncIn, setNextSyncIn] = useState<number | null>(null);
+
   // Evidence Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeEvidence, setActiveEvidence] = useState<EvidenceReference | null>(null);
@@ -65,12 +70,33 @@ export default function DashboardPage() {
       try {
         const res = await fetch('/api/crm/sync', { method: 'POST' });
         const json = await res.json();
+        setLastSyncTime(new Date().toLocaleTimeString());
         if (json.success && json.newSignalsCount > 0) {
           // New events ingested: reload fresh state seamlessly
+          setLastSyncError(null);
           loadData();
+        } else if (!json.success && json.error) {
+          setLastSyncError(json.error);
+        } else {
+          setLastSyncError(null);
         }
-      } catch (err) {
-        // Silently handle transient network pauses
+        // Show next permitted sync time from server
+        if (json.retryAfterSeconds) {
+          setNextSyncIn(json.retryAfterSeconds);
+        } else {
+          setNextSyncIn(65);
+        }
+        // Attempt to retry any pending notes opportunistically
+        try {
+          await fetch('/api/crm/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'retry_pending' }),
+          });
+        } catch (_) {}
+      } catch (err: any) {
+        setLastSyncTime(new Date().toLocaleTimeString());
+        setLastSyncError(err.message || 'Network error');
       }
     };
 
@@ -182,6 +208,16 @@ export default function DashboardPage() {
 
         {/* Main Content Viewport */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
+          {/* Sync Status Telemetry Bar */}
+          {lastSyncTime && (
+            <div className={`mb-4 px-4 py-2 rounded-lg text-xs font-mono flex items-center gap-4 ${lastSyncError ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`}>
+              <span className={`w-2 h-2 rounded-full ${lastSyncError ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
+              <span>Last sync: {lastSyncTime}</span>
+              {lastSyncError && <span className="text-amber-700">· Error: {lastSyncError}</span>}
+              {nextSyncIn !== null && <span>· Next: ~{nextSyncIn}s</span>}
+              <span className="ml-auto text-slate-500">Auto-poll: 65s</span>
+            </div>
+          )}
           {loading ? (
             <div className="h-full flex items-center justify-center space-y-2 flex-col">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />

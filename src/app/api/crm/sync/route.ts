@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendLiveSignalAsync, getCRMDataAsync } from '@/lib/data-store';
-import { getStorageDiagnostics } from '@/lib/storage';
+import { getStorageDiagnosticsAsync } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ async function handleSync() {
       message: `Token allows 1 call per minute. Wait ${rateCheck.secondsRemaining}s before syncing again.`,
       retryAfterSeconds: rateCheck.secondsRemaining,
       data: currentData,
-      storage: getStorageDiagnostics(),
+      storage: await getStorageDiagnosticsAsync(),
     });
   }
 
@@ -69,7 +69,7 @@ async function handleSync() {
           : 'Live sync complete: No new signals on Questathon server.',
         newSignalsCount: addedCount,
         data: updatedData,
-        storage: getStorageDiagnostics(),
+        storage: await getStorageDiagnosticsAsync(),
       });
     }
 
@@ -79,7 +79,7 @@ async function handleSync() {
       error: signalsResult.error || 'Failed to fetch signals from MCP.',
       retryAfterSeconds: signalsResult.retryAfterSeconds,
       data: currentData,
-      storage: getStorageDiagnostics(),
+      storage: await getStorageDiagnosticsAsync(),
     });
   } catch (err: any) {
     return NextResponse.json({

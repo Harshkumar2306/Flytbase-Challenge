@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCRMDataAsync } from '@/lib/data-store';
 import { getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
-import { getStorageDiagnostics } from '@/lib/storage';
+import { getStorageDiagnosticsAsync } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const data = await getCRMDataAsync();
     const rateStatus = await getRateLimitStatusAsync();
-    const storageDiag = getStorageDiagnostics();
+    const storageDiag = await getStorageDiagnosticsAsync();
     const hasToken = !!getSafeToken();
 
     // Calculate aggregated overview stats

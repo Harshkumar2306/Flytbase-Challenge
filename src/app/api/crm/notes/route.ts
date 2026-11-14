@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendCRMNoteAsync } from '@/lib/data-store';
-import { getStoredNotesAsync } from '@/lib/storage';
+import { getStoredNotesAsync, updateStoredNoteStatusAsync } from '@/lib/storage';
 import { CRMNote } from '@/types/crm';
 
 export const dynamic = 'force-dynamic';
@@ -14,10 +14,65 @@ export async function GET() {
   });
 }
 
+/**
+ * Retry pending notes when MCP rate limit allows.
+ * Called internally; returns count of notes successfully synced.
+ */
+async function retryPendingNotes(): Promise<{ retriedCount: number; errors: string[] }> {
+  const token = getSafeToken();
+  if (!token) return { retriedCount: 0, errors: [] };
+
+  const rateCheck = await getRateLimitStatusAsync();
+  if (!rateCheck.canCallNow) return { retriedCount: 0, errors: [] };
+
+  const notes = await getStoredNotesAsync();
+  const pending = notes.filter(
+    (n) => n.syncStatus === 'saved_locally_pending' || n.syncStatus === 'pending_retry'
+  );
+
+  if (pending.length === 0) return { retriedCount: 0, errors: [] };
+
+  // Only retry the oldest pending note to respect 1-call/min rate limit
+  const oldest = pending[pending.length - 1];
+  const errors: string[] = [];
+  let retriedCount = 0;
+
+  try {
+    const result = await callTool('write_note', {
+      text: oldest.text,
+      account: oldest.accountId !== 'All Accounts' ? oldest.accountId : undefined,
+      kind: oldest.kind,
+      title: oldest.title,
+    });
+
+    if (result.success) {
+      await updateStoredNoteStatusAsync(oldest.id, 'synced', new Date().toISOString());
+      retriedCount = 1;
+    } else {
+      await updateStoredNoteStatusAsync(oldest.id, 'pending_retry', undefined, result.error);
+      errors.push(`${oldest.id}: ${result.error}`);
+    }
+  } catch (e: any) {
+    await updateStoredNoteStatusAsync(oldest.id, 'pending_retry', undefined, e.message);
+    errors.push(`${oldest.id}: ${e.message}`);
+  }
+
+  return { retriedCount, errors };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { text, account, kind = 'note', title } = body;
+    const { text, account, kind = 'note', title, action } = body;
+
+    // Support a retry action for pending notes
+    if (action === 'retry_pending') {
+      const result = await retryPendingNotes();
+      return NextResponse.json({
+        success: true,
+        ...result,
+      });
+    }
 
     if (!text || text.trim() === '') {
       return NextResponse.json({

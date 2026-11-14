@@ -257,13 +257,18 @@ describe('Priority 4 & 5: Distributed Locking, Storage Persistence & Idempotency
     assert.equal(dupAttempt, false, 'Exact duplicate event must be deduplicated');
   });
 
-  test('Storage diagnostics expose active engine and telemetry', () => {
+  test('Storage diagnostics expose active engine and telemetry', async () => {
     const diag = getStorageDiagnostics();
-    assert.ok(['vercel_kv', 'postgres', 'atomic_file_store'].includes(diag.engine));
+    assert.ok(['vercel_kv', 'atomic_file_store'].includes(diag.engine));
     assert.ok(typeof diag.engineDescription === 'string');
     assert.ok(typeof diag.isDistributed === 'boolean');
     assert.ok(typeof diag.notesCount === 'number');
     assert.ok(typeof diag.signalsCount === 'number');
+
+    const { getStorageDiagnosticsAsync } = await import('../src/lib/storage.ts');
+    const asyncDiag = await getStorageDiagnosticsAsync();
+    assert.ok(['vercel_kv', 'atomic_file_store'].includes(asyncDiag.engine));
+    assert.ok(typeof asyncDiag.notesCount === 'number');
   });
 
   test('Async storage methods read and persist notes and signals seamlessly', async () => {

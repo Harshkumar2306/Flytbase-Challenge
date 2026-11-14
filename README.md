@@ -47,12 +47,13 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 - **Aldermoor:**
   - *Stefan Roy (Neutral):* Head of Group Security. Signed original order; single point of failure risk.
   - *Beatriz Alonso (Guarded):* Plant 7 Manager. Operational user; requires multi-user night alert routing.
-  - *Nadia Rahman (Group Finance):* **Budget Owner / Payer.** NEVER MET (Critical Gap). Shared mailbox halted renewal.
+  - *Nadia Rahman (Group Finance):* **Unconfirmed Budget Authority.** NEVER MET (Critical Gap). Group Finance Controller; commercial renewal signing authority remains unconfirmed pending direct discovery. Shared mailbox halted renewal.
   - *Owen Fitch (Group IT):* Technical Blocker. NEVER MET (Critical Gap). Controls plant network access.
   - *Julian Tate (Risk & Insurance):* NEVER MET (Critical Gap). Controls insurance discount.
 
 ### Question 3: What do you do first? (Monday 9am Action Plan)
 - **Scoring Formula:** `Priority Score (0-100) = Deal Value Weight (30) + Deadline Urgency (25) + Blocker Clearance (25) + Evidence Readiness (20)`
+- **Model:** Deterministic prioritization with explicit scoring factors and a prepared account handover plan. Scoring weights are set during morning discovery and do not dynamically recalculate without code changes.
 - **ECPA Rank 1 (Score 95):** Deliver engineering data-flow pack to Fatima Osei (DPO) and Rhys Calder to agree Tarn Valley launch. Owner: CSM with SRV. Due: 2026-11-18. Moves `a_tarn` (£142,302).
 - **ECPA Rank 2 (Score 90):** Submit flight log evidence (14 active docks) to Rhys Calder for contract renewal. Owner: CSM. Due: 2026-11-20. Moves `a_renewal` (£136,361).
 - **ECPA Rank 3 (Score 88):** Submit helicopter comparison (£1,500/hr) and shift model to Ewan Brooks before autumn window closes (8 moves left). Owner: CSM. Due: 2026-11-22. Moves `a_westmere` (£93,217).
@@ -82,7 +83,7 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 - **Styling:** Tailwind CSS (Navy enterprise design system)
 - **Icons:** Lucide React
 - **Validation:** Zod
-- **Data Persistence & Cache:** Multi-engine durable persistence (Vercel KV REST, Postgres, or atomic file store with POSIX rename staging)
+- **Data Persistence & Cache:** Multi-engine durable persistence (Vercel KV REST for distributed multi-instance deployment, or atomic file store with POSIX rename staging for local dev fallback)
 - **MCP Client:** Server-side JSON-RPC 2.0 client with distributed atomic rate-limiting lock (1 call/min) and zero token leakage
 
 ---
@@ -178,6 +179,10 @@ The application is fully configured for zero-config Vercel deployment:
 1. **Dock Serial Mapping:** Customer success records omitted per-force and per-plant dock serial locations (noted as Blind Spot).
 2. **Win Probabilities:** No fabricated probability percentages; the CRM states "Insufficient evidence to estimate" when empirical conversion rates are absent.
 3. **Rate Pacing:** Enforces 60-second cooldowns on MCP interactions; updates are queued and stored locally if dispatched during cooldowns.
+4. **Morning Discovery Estimates:** The four ECPA pipeline values (£136,361, £142,302, £93,217, £359,560) were qualified during the Questathon morning simulation session. They are deterministic constants, not dynamically recalculated from raw records.
+5. **Action Plan Scoring:** Priority scores use a deterministic formula with explicit factor weights prepared during morning discovery. Ranks are set at build time, not dynamically re-ranked from live data.
+6. **Client-Driven Polling:** Live sync runs only while a dashboard tab is open (65-second browser-driven polling). It is not a server-side scheduled job.
+7. **KV Concurrency:** Notes and signals use read-modify-write on a single Redis key. Under very high concurrent writes, the last writer wins. Deduplication and retry logic mitigate data loss.
 
 ---
 
