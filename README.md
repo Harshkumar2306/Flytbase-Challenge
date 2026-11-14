@@ -22,15 +22,20 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 ## 2. The Five Management Answers
 
 ### Question 1: What is the book worth?
-- **ECPA Supported Book:** **£731,440** (Total nominal potential: £2,300,000)
-  - `a_renewal` (£136,361): 14 of 18 active flying docks verified in flight logs (`files/flight_log_force_month.csv`, fact `km_usage_1`).
-  - `a_tarn` (£142,302): Blocker cleared by SRV engineering data-flow pack (`dataflow_pack.csv`, fact `srv_dataflow`).
-  - `a_westmere` (£93,217): Backed by £1,500/hr helicopter benchmark comparison (`files/helicopter_cost_overtime.csv`, fact `eb_heli_1`).
-  - `a_tender` (£359,560): Backed by multi-force operating model qualifications (`hd_calloff_2`).
-  - *Unsupported potential shown apart:* £1,568,560 (speculative 300-dock volume and unfunded stadium expansion).
-- **Aldermoor Supported Book:** **€140,000** (Total nominal claims: €1,550,000)
-  - `b_renewal` (€140,000): Signed annual order form (`contract.txt`) and paid invoices (`INV-26-0204`).
-  - *Unsupported claims shown apart:* €1,410,000 (Stefan Roy's unbacked €1.2M savings email claim, Plant 15 & idle plant pitch).
+- **Signed Existing Contracts (Order Form Verified):**
+  - **ECPA Baseline:** **£350,000/yr** (35 docks @ £10k/yr, verified by `doc_a_contract` and paid quarterly invoices).
+  - **Aldermoor Baseline:** **€140,000/yr** (14 docks @ €10k/yr, verified by `doc_b_contract` and paid invoices).
+- **Qualified Morning Discovery Pipeline:**
+  - **ECPA Pipeline:** **£731,440** across 4 qualified deals:
+    - `a_renewal` (£136,361): 14 of 18 active flying docks verified in flight logs (`files/flight_log_force_month.csv`, fact `km_usage_1`).
+    - `a_tarn` (£142,302): Blocker cleared by SRV engineering data-flow pack (`dataflow_pack.txt`, fact `srv_dataflow`).
+    - `a_westmere` (£93,217): Grounded by £1,500/hr helicopter benchmark comparison (`files/helicopter_cost_overtime.csv`, fact `eb_heli_1`).
+    - `a_tender` (£359,560): Grounded by multi-force operating model qualifications (`hd_calloff_2`).
+- **Nominal Opportunity Caps (worth_up_to):**
+  - **ECPA:** £2,300,000 maximum framework ceiling (isolating £1,568,560 uncommitted pipeline).
+  - **Aldermoor:** €350,000 full-fleet potential.
+- **Unbacked Customer Claims (Shown Strictly Apart):**
+  - **Aldermoor €1.2M Savings:** Stefan Roy's email claim (`email_b_savings`) is classified strictly as an unbacked customer claim contributing **€0 to supported commercial pipeline** until audited against plant guard reduction logs. Operational flight logs and helicopter benchmarks are presented as operational evidence, never confused for commercial pricing calculations.
 
 ### Question 2: Who holds the power?
 - **ECPA:**
@@ -173,3 +178,11 @@ The application is fully configured for zero-config Vercel deployment:
 1. **Dock Serial Mapping:** Customer success records omitted per-force and per-plant dock serial locations (noted as Blind Spot).
 2. **Win Probabilities:** No fabricated probability percentages; the CRM states "Insufficient evidence to estimate" when empirical conversion rates are absent.
 3. **Rate Pacing:** Enforces 60-second cooldowns on MCP interactions; updates are queued and stored locally if dispatched during cooldowns.
+
+---
+
+## 9. Hand-In Deliverables & Documents
+
+- **Thinking Document:** [`docs/THINKING_DOC.md`](docs/THINKING_DOC.md) (One-page decision architecture, rules, and AI usage)
+- **Walkthrough Video Script:** [`docs/WALKTHROUGH_VIDEO_SCRIPT.md`](docs/WALKTHROUGH_VIDEO_SCRIPT.md) (3-minute scene-by-scene script)
+- **Automated Test Suite:** Run `npm test` to verify financial totals, genuine evidence ID resolution, and persistent rate limiting.
