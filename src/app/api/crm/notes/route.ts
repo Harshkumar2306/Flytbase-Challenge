@@ -1,107 +1,137 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendCRMNoteAsync } from '@/lib/data-store';
-import { getStoredNotesAsync, updateStoredNoteStatusAsync } from '@/lib/storage';
+import { getStoredNotesAsync, getPendingNotesAsync } from '@/lib/storage';
 import { CRMNote } from '@/types/crm';
 
 export const dynamic = 'force-dynamic';
 
+// In-memory abuse protection limiter for public demo (tracks IP submissions)
+const ipSubmissionTracker = new Map<string, { count: number; firstSeen: number }>();
+
+function checkIpRateLimit(ip: string): { allowed: boolean; retryAfterSec?: number } {
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000; // 10 minutes
+  const maxWrites = 6; // Max 6 note submissions per 10 minutes per IP
+
+  const record = ipSubmissionTracker.get(ip);
+  if (!record || now - record.firstSeen > windowMs) {
+    ipSubmissionTracker.set(ip, { count: 1, firstSeen: now });
+    return { allowed: true };
+  }
+
+  if (record.count >= maxWrites) {
+    const remainingSec = Math.ceil((record.firstSeen + windowMs - now) / 1000);
+    return { allowed: false, retryAfterSec: remainingSec };
+  }
+
+  record.count += 1;
+  return { allowed: true };
+}
+
 export async function GET() {
   const notes = await getStoredNotesAsync();
+  const pending = await getPendingNotesAsync();
   return NextResponse.json({
     success: true,
     notes,
+    pendingCount: pending.length,
   });
-}
-
-/**
- * Retry pending notes when MCP rate limit allows.
- * Called internally; returns count of notes successfully synced.
- */
-async function retryPendingNotes(): Promise<{ retriedCount: number; errors: string[] }> {
-  const token = getSafeToken();
-  if (!token) return { retriedCount: 0, errors: [] };
-
-  const rateCheck = await getRateLimitStatusAsync();
-  if (!rateCheck.canCallNow) return { retriedCount: 0, errors: [] };
-
-  const notes = await getStoredNotesAsync();
-  const pending = notes.filter(
-    (n) => n.syncStatus === 'saved_locally_pending' || n.syncStatus === 'pending_retry'
-  );
-
-  if (pending.length === 0) return { retriedCount: 0, errors: [] };
-
-  // Only retry the oldest pending note to respect 1-call/min rate limit
-  const oldest = pending[pending.length - 1];
-  const errors: string[] = [];
-  let retriedCount = 0;
-
-  try {
-    const result = await callTool('write_note', {
-      text: oldest.text,
-      account: oldest.accountId !== 'All Accounts' ? oldest.accountId : undefined,
-      kind: oldest.kind,
-      title: oldest.title,
-    });
-
-    if (result.success) {
-      await updateStoredNoteStatusAsync(oldest.id, 'synced', new Date().toISOString());
-      retriedCount = 1;
-    } else {
-      await updateStoredNoteStatusAsync(oldest.id, 'pending_retry', undefined, result.error);
-      errors.push(`${oldest.id}: ${result.error}`);
-    }
-  } catch (e: any) {
-    await updateStoredNoteStatusAsync(oldest.id, 'pending_retry', undefined, e.message);
-    errors.push(`${oldest.id}: ${e.message}`);
-  }
-
-  return { retriedCount, errors };
 }
 
 export async function POST(req: Request) {
   try {
+    // 1. Authorization / Access Control check
+    const configuredWriteKey = process.env.CRM_WRITE_KEY;
+    const providedWriteKey = req.headers.get('x-crm-write-key');
+
+    if (configuredWriteKey && providedWriteKey !== configuredWriteKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized: Write operations require a valid x-crm-write-key header.',
+        },
+        { status: 401 }
+      );
+    }
+
+    // 2. IP Abuse Rate Limiting (Protects server-side token when CRM_WRITE_KEY is unconfigured)
+    const clientIp =
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown-client';
+
+    const ipCheck = checkIpRateLimit(clientIp);
+    if (!ipCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Abuse protection: Too many notes submitted from this IP. Please wait ${ipCheck.retryAfterSec}s.`,
+          retryAfterSeconds: ipCheck.retryAfterSec,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 3. Strict Input Parsing & Length Boundaries
     const body = await req.json();
-    const { text, account, kind = 'note', title, action } = body;
+    const { text, account, kind = 'note', title } = body;
 
-    // Support a retry action for pending notes
-    if (action === 'retry_pending') {
-      const result = await retryPendingNotes();
-      return NextResponse.json({
-        success: true,
-        ...result,
-      });
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Note text is required.',
+        },
+        { status: 400 }
+      );
     }
 
-    if (!text || text.trim() === '') {
-      return NextResponse.json({
-        success: false,
-        error: 'Note text is required.',
-      }, { status: 400 });
+    if (text.length > 1000) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Note text exceeds maximum allowed size (1,000 characters).',
+        },
+        { status: 400 }
+      );
     }
+
+    const cleanTitle = title && typeof title === 'string' ? title.trim().slice(0, 120) : undefined;
 
     const validKinds = ['note', 'task', 'risk', 'next_step'];
     if (!validKinds.includes(kind)) {
-      return NextResponse.json({
-        success: false,
-        error: `Invalid kind: ${kind}. Must be one of ${validKinds.join(', ')}.`,
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid kind: ${kind}. Must be one of ${validKinds.join(', ')}.`,
+        },
+        { status: 400 }
+      );
     }
+
+    const validAccounts = ['A', 'B', 'All Accounts'];
+    const targetAccount = validAccounts.includes(account) ? account : 'All Accounts';
+
+    // 4. Stable Deterministic Idempotency Key
+    // Derived from content + account + kind to prevent duplicate creation
+    const textHash = crypto.createHash('sha256').update(`${targetAccount}:${kind}:${text.trim()}`).digest('hex').slice(0, 12);
+    const noteId = `note_${Date.now()}_${textHash}`;
 
     const token = getSafeToken();
     let mcpResult: any = null;
     let syncState: 'synced' | 'saved_locally_pending' = 'saved_locally_pending';
 
+    // 5. Opportunistic Dispatch if Rate Limit Slot is Free Right Now
     if (token) {
       const rateCheck = await getRateLimitStatusAsync();
       if (rateCheck.canCallNow) {
-        // Dispatch write_note to Questathon MCP
         mcpResult = await callTool('write_note', {
           text: text.trim(),
-          account: account || undefined,
+          account: targetAccount !== 'All Accounts' ? targetAccount : undefined,
           kind,
-          title: title ? title.trim() : undefined,
+          title: cleanTitle ? `${cleanTitle} [id:${textHash}]` : undefined,
         });
 
         if (mcpResult.success) {
@@ -110,20 +140,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // Stable note identifier
-    const noteId = `note_${Date.now()}_${Buffer.from(text.trim()).toString('hex').slice(0, 8)}`;
-
     const newNote: CRMNote = {
       id: noteId,
-      accountId: account || 'All Accounts',
+      accountId: targetAccount,
       kind,
-      title: title ? title.trim() : (kind.toUpperCase() + ': ' + text.slice(0, 30)),
+      title: cleanTitle || `${kind.toUpperCase()}: ${text.slice(0, 30)}`,
       text: text.trim(),
       createdAt: new Date().toISOString(),
       author: 'Account Manager',
       syncStatus: syncState,
+      remoteConfirmedAt: syncState === 'synced' ? new Date().toISOString() : undefined,
+      remoteError: mcpResult && !mcpResult.success ? mcpResult.error : undefined,
     };
 
+    // Staged atomically via per-record HSET / atomic local file store
     await appendCRMNoteAsync(newNote);
 
     return NextResponse.json({
@@ -131,11 +161,18 @@ export async function POST(req: Request) {
       note: newNote,
       mcpStatus: syncState,
       mcpError: mcpResult && !mcpResult.success ? mcpResult.error : undefined,
+      message:
+        syncState === 'synced'
+          ? 'Note saved and confirmed synced to Questathon MCP.'
+          : 'Note saved locally. Scheduled for automatic background sync to Questathon MCP.',
     });
   } catch (err: any) {
-    return NextResponse.json({
-      success: false,
-      error: err.message,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: err.message,
+      },
+      { status: 500 }
+    );
   }
 }

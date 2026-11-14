@@ -83,8 +83,9 @@ Unlike traditional CRMs that store unvetted promises or optimistic sales totals,
 - **Styling:** Tailwind CSS (Navy enterprise design system)
 - **Icons:** Lucide React
 - **Validation:** Zod
-- **Data Persistence & Cache:** Multi-engine durable persistence (Vercel KV REST for distributed multi-instance deployment, or atomic file store with POSIX rename staging for local dev fallback)
-- **MCP Client:** Server-side JSON-RPC 2.0 client with distributed atomic rate-limiting lock (1 call/min) and zero token leakage
+- **Data Persistence & Cache:** Multi-engine durable persistence (Vercel KV REST with atomic Redis Hashes `HSET`/`HSETNX` for distributed multi-instance deployment, with local atomic file staging as resilient fallback)
+- **MCP Client:** Server-side JSON-RPC 2.0 client with separated in-flight execution lock (15s owner-verified) and cooldown lock (61s) enforcing the 1 call/min rule without token leakage
+- **Unified Scheduler:** Single 1-call/min quota coordinator prioritizes draining pending notes before polling live signals, preventing queue starvation
 
 ---
 
@@ -107,7 +108,9 @@ Questathon Public MCP Endpoint (https://questathon.aihackerscollective.com/api/p
 1. **Zero Token in Client:** `AQ_TOKEN` is accessed strictly in server routes (`src/lib/mcp.ts`). Never exposed in browser bundles or HTML.
 2. **Zero Token in Git:** `.env.local` is ignored by `.gitignore`. Zero commits contain credentials.
 3. **Safe Logging:** Error handlers and loggers sanitize authorization headers and tokens.
-4. **Rate Limit Protection:** Tracks request timestamps and `retry_after_seconds` to enforce 1 call per minute, avoiding 429 penalties.
+4. **Rate Limit Protection:** Separates in-flight execution locks from cooldown locks, preventing race conditions or premature dispatch.
+5. **Write Abuse Protection:** `POST /api/crm/notes` enforces strict payload boundaries (max 1,000 chars), IP submission throttling, and optional `CRM_WRITE_KEY` authorization.
+6. **Owner-Verified Lock Release:** MCP locks verify the unique owner token before releasing in-flight status, preventing one request from releasing another's lock.
 
 ---
 
@@ -182,7 +185,8 @@ The application is fully configured for zero-config Vercel deployment:
 4. **Morning Discovery Estimates:** The four ECPA pipeline values (£136,361, £142,302, £93,217, £359,560) were qualified during the Questathon morning simulation session. They are deterministic constants, not dynamically recalculated from raw records.
 5. **Action Plan Scoring:** Priority scores use a deterministic formula with explicit factor weights prepared during morning discovery. Ranks are set at build time, not dynamically re-ranked from live data.
 6. **Client-Driven Polling:** Live sync runs only while a dashboard tab is open (65-second browser-driven polling). It is not a server-side scheduled job.
-7. **KV Concurrency:** Notes and signals use read-modify-write on a single Redis key. Under very high concurrent writes, the last writer wins. Deduplication and retry logic mitigate data loss.
+7. **Atomic Per-Record Storage:** Notes and signals are stored using atomic Redis Hashes (`HSET` per note, `HSETNX` per signal composite key), preventing race conditions without rewriting whole collections. Degraded fallback mode activates automatically if the KV endpoint is unreachable.
+8. **Write Endpoint Protection:** `POST /api/crm/notes` enforces abuse limits (IP throttling and length bounds) and optional `CRM_WRITE_KEY` authorization to protect server token quota.
 
 ---
 

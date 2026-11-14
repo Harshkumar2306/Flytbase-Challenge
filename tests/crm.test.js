@@ -51,6 +51,9 @@ describe('Priority 1 & 2: Financial Provenance & Separation of Tiers', () => {
     assert.ok(aldermoor, 'Account B must exist');
     // Existing contract baseline: 14 docks @ €10,000/yr expiring 31 Jan 2027 (NOT a secured renewal)
     assert.equal(aldermoor.signedContractBaseline, 140000, 'Aldermoor contract baseline must be €140,000');
+    // Future qualified discovery pipeline for new expansion deals is €0
+    assert.equal(aldermoor.futurePipelineEstimate, 0, 'Aldermoor future discovery pipeline for new expansion deals must be €0');
+    assert.equal(aldermoor.supportedPipeline, 140000, 'Supported contract baseline is €140,000 (doc_b_contract)');
     
     // Stefan Roy's €1.2M savings claim must NOT be treated as commercial deal value
     const sisterDeal = getDealById('b_sister_company');
@@ -301,6 +304,62 @@ describe('Priority 4 & 5: Distributed Locking, Storage Persistence & Idempotency
     const asyncSignals = await getStoredSignalsAsync();
     const sigFound = asyncSignals.find((s) => s.id === asyncSigId);
     assert.ok(sigFound, 'Async saved signal must be readable via getStoredSignalsAsync');
+  });
+
+  test('Safe lock release enforces owner-token verification', async () => {
+    // Release any prior lock
+    await releaseLock(0);
+
+    const first = await acquireLock();
+    assert.equal(first.acquired, true, 'First lock acquisition should succeed');
+    assert.ok(first.ownerToken, 'Must issue an ownerToken upon acquisition');
+
+    // Attempt release with WRONG owner token
+    await releaseLock('imposter_token_99999', 61);
+
+    // In-flight status must still be protected against unauthorized release
+    const status = getRateLimitStatus();
+    assert.equal(status.inFlight, true, 'In-flight lock must NOT be released by an imposter token');
+
+    // Release with CORRECT owner token
+    await releaseLock(first.ownerToken, 0);
+    const postReleaseStatus = getRateLimitStatus();
+    assert.equal(postReleaseStatus.inFlight, false, 'Lock must be released when matching owner token is supplied');
+  });
+
+  test('Pending notes detection accurately tracks notes awaiting MCP dispatch', async () => {
+    const { getPendingNotesAsync } = await import('../src/lib/storage.ts');
+    
+    const pendingNoteId = `pending_${Date.now()}`;
+    await saveStoredNoteAsync({
+      id: pendingNoteId,
+      accountId: 'A',
+      kind: 'task',
+      title: 'Pending Note Queue Verification',
+      text: 'Note awaiting remote sync',
+      createdAt: new Date().toISOString(),
+      author: 'Queue Test',
+      syncStatus: 'saved_locally_pending',
+    });
+
+    const pending = await getPendingNotesAsync();
+    const found = pending.find((n) => n.id === pendingNoteId);
+    assert.ok(found, 'Pending note must be returned by getPendingNotesAsync');
+
+    // Mark it synced
+    await updateStoredNoteStatus(pendingNoteId, 'synced', new Date().toISOString());
+    const pendingAfter = await getPendingNotesAsync();
+    const foundAfter = pendingAfter.find((n) => n.id === pendingNoteId);
+    assert.equal(foundAfter, undefined, 'Synced note must no longer appear in pending queue');
+  });
+
+  test('KV command failures return explicit error objects without false positive success', async () => {
+    const { kvRestCommand } = await import('../src/lib/storage.ts');
+    
+    // In test environment without KV configured, command returns ok: false with explicit error
+    const result = await kvRestCommand(['PING']);
+    assert.equal(result.ok, false, 'Unconfigured KV must return ok: false without throwing silently');
+    assert.ok(result.error && result.error.length > 0, 'Must provide explicit error explanation');
   });
 });
 

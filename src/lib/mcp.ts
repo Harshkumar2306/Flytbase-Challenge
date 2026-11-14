@@ -52,16 +52,22 @@ export async function getRateLimitStatusAsync(): Promise<{
 /**
  * Exported lock helpers for direct testing and synchronization control
  */
-export async function acquireLock(): Promise<{ acquired: boolean; error?: string; retryAfterSeconds?: number; engine?: string }> {
+export async function acquireLock(): Promise<{ acquired: boolean; ownerToken?: string; error?: string; retryAfterSeconds?: number; engine?: string }> {
   return acquireDistributedLock();
 }
 
-export async function releaseLock(retryAfterSeconds = 61): Promise<void> {
-  return releaseDistributedLock(retryAfterSeconds);
+export async function releaseLock(arg1?: string | number, arg2?: number): Promise<void> {
+  if (typeof arg1 === 'number') {
+    return releaseDistributedLock(undefined, arg1);
+  }
+  return releaseDistributedLock(arg1, arg2 ?? 61);
 }
 
-export async function releaseLockOnError(retryAfterSeconds = 61): Promise<void> {
-  return releaseDistributedLockOnError(retryAfterSeconds);
+export async function releaseLockOnError(arg1?: string | number, arg2?: number): Promise<void> {
+  if (typeof arg1 === 'number') {
+    return releaseDistributedLockOnError(undefined, arg1);
+  }
+  return releaseDistributedLockOnError(arg1, arg2 ?? 61);
 }
 
 /**
@@ -81,7 +87,7 @@ export async function callTool<T = any>(
     };
   }
 
-  // 1. Atomically acquire distributed lock before dispatch
+  // 1. Atomically acquire distributed lock before dispatch with unique owner token
   const lockCheck = await acquireDistributedLock();
   if (!lockCheck.acquired) {
     return {
@@ -90,6 +96,8 @@ export async function callTool<T = any>(
       retryAfterSeconds: lockCheck.retryAfterSeconds,
     };
   }
+
+  const ownerToken = lockCheck.ownerToken;
 
   try {
     const payload = {
@@ -119,7 +127,7 @@ export async function callTool<T = any>(
     if (res.status === 429) {
       const errorJson = await res.json().catch(() => ({}));
       const wait = errorJson.retry_after_seconds || 61;
-      await releaseDistributedLock(wait);
+      await releaseDistributedLock(ownerToken, wait);
       return {
         success: false,
         error: errorJson.error || `Too many requests: token allows 1 call per minute. Wait ${wait}s.`,
@@ -130,7 +138,7 @@ export async function callTool<T = any>(
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       // Conservative handling: HTTP errors might still have reached Questathon
-      await releaseDistributedLockOnError(61);
+      await releaseDistributedLockOnError(ownerToken, 61);
       return {
         success: false,
         error: `MCP HTTP Error ${res.status}: ${errText.slice(0, 150)}`,
@@ -140,7 +148,7 @@ export async function callTool<T = any>(
 
     const json = await res.json();
     if (json.error) {
-      await releaseDistributedLockOnError(61);
+      await releaseDistributedLockOnError(ownerToken, 61);
       return {
         success: false,
         error: json.error.message || 'MCP JSON-RPC Error',
@@ -149,7 +157,7 @@ export async function callTool<T = any>(
     }
 
     if (json.result?.isError) {
-      await releaseDistributedLockOnError(61);
+      await releaseDistributedLockOnError(ownerToken, 61);
       return {
         success: false,
         error: json.result.content?.[0]?.text || 'MCP Tool reported an error',
@@ -157,8 +165,8 @@ export async function callTool<T = any>(
       };
     }
 
-    // Call succeeded: record confirmed 61-second rate limit window
-    await releaseDistributedLock(61);
+    // Call succeeded: record confirmed 61-second rate limit window and release in-flight
+    await releaseDistributedLock(ownerToken, 61);
 
     const rawText = json.result?.content?.[0]?.text;
     let parsedData = rawText;
@@ -172,7 +180,7 @@ export async function callTool<T = any>(
     };
   } catch (err: any) {
     // Conservative handling: network failure or timeout could mean request was dispatched
-    await releaseDistributedLockOnError(61);
+    await releaseDistributedLockOnError(ownerToken, 61);
     return {
       success: false,
       error: `Network/MCP exception (${err.message}). Rate limit preserved conservatively for 61s.`,
@@ -217,10 +225,12 @@ export async function fetchRestEndpoint<T = any>(
       signal: controller.signal,
     }).finally(() => clearTimeout(timeoutId));
 
+    const ownerToken = lockCheck.ownerToken;
+
     if (res.status === 429) {
       const errorJson = await res.json().catch(() => ({}));
       const wait = errorJson.retry_after_seconds || 61;
-      await releaseDistributedLock(wait);
+      await releaseDistributedLock(ownerToken, wait);
       return {
         success: false,
         error: errorJson.error || `Too many requests: wait ${wait} seconds.`,
@@ -229,7 +239,7 @@ export async function fetchRestEndpoint<T = any>(
     }
 
     if (!res.ok) {
-      await releaseDistributedLockOnError(61);
+      await releaseDistributedLockOnError(ownerToken, 61);
       return {
         success: false,
         error: `HTTP ${res.status}`,
@@ -237,14 +247,14 @@ export async function fetchRestEndpoint<T = any>(
       };
     }
 
-    await releaseDistributedLock(61);
+    await releaseDistributedLock(ownerToken, 61);
     const json = await res.json();
     return {
       success: true,
       data: json,
     };
   } catch (err: any) {
-    await releaseDistributedLockOnError(61);
+    await releaseDistributedLockOnError(lockCheck.ownerToken, 61);
     return {
       success: false,
       error: err.message,

@@ -29,10 +29,13 @@ export default function DashboardPage() {
   const [evidenceExplorerRecords, setEvidenceExplorerRecords] = useState<EvidenceRecord[]>([]);
   const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceReference>>({});
 
-  // Sync status telemetry (Priority 5: polling error visibility)
+  // Sync status telemetry
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [lastSyncAction, setLastSyncAction] = useState<string | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [nextSyncIn, setNextSyncIn] = useState<number | null>(null);
+  const [storageEngine, setStorageEngine] = useState<string>('atomic_file_store');
+  const [pendingNotesCount, setPendingNotesCount] = useState<number>(0);
 
   // Evidence Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +56,10 @@ export default function DashboardPage() {
         setNotes(json.data.notes || []);
         setEvidenceExplorerRecords(json.data.evidenceExplorer || []);
         setEvidenceMap(json.data.evidenceMap || {});
+        if (json.data.meta?.storage) {
+          setStorageEngine(json.data.meta.storage.engine || 'atomic_file_store');
+          setPendingNotesCount(json.data.meta.storage.pendingNotesCount || 0);
+        }
       }
     } catch (err) {
       console.error('Error fetching CRM data:', err);
@@ -64,36 +71,46 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
 
-    // Automatic Live-Event Background Ingestion
+    // Automatic Live-Event & Note Background Scheduler
     // Checks /api/crm/sync every 65 seconds (respects Questathon 1-call-per-minute rate limit)
+    // Coordinated priority: drains pending notes first, then polls live signals
     const runBackgroundSync = async () => {
       try {
         const res = await fetch('/api/crm/sync', { method: 'POST' });
         const json = await res.json();
         setLastSyncTime(new Date().toLocaleTimeString());
-        if (json.success && json.newSignalsCount > 0) {
-          // New events ingested: reload fresh state seamlessly
-          setLastSyncError(null);
-          loadData();
-        } else if (!json.success && json.error) {
-          setLastSyncError(json.error);
-        } else {
-          setLastSyncError(null);
+
+        if (json.storage) {
+          setStorageEngine(json.storage.engine);
+          setPendingNotesCount(json.storage.pendingNotesCount || 0);
         }
-        // Show next permitted sync time from server
+
+        if (json.success) {
+          setLastSyncError(null);
+          if (json.actionTaken === 'dispatched_pending_note') {
+            setLastSyncAction(`Synced pending note "${json.dispatchedNoteTitle}" (${json.remainingPendingCount} queued)`);
+            loadData();
+          } else if (json.actionTaken === 'fetched_signals') {
+            if (json.newSignalsCount > 0) {
+              setLastSyncAction(`Ingested ${json.newSignalsCount} new live signal(s) from MCP`);
+              loadData();
+            } else {
+              setLastSyncAction('MCP signals checked: No new events');
+            }
+          }
+        } else if (json.reason === 'rate_limited') {
+          // Normal rate limit cooldown
+          setNextSyncIn(json.retryAfterSeconds || 60);
+          setLastSyncAction(`Cooldown active (${json.retryAfterSeconds}s remaining)`);
+        } else if (json.error) {
+          setLastSyncError(json.error);
+        }
+
         if (json.retryAfterSeconds) {
           setNextSyncIn(json.retryAfterSeconds);
         } else {
           setNextSyncIn(65);
         }
-        // Attempt to retry any pending notes opportunistically
-        try {
-          await fetch('/api/crm/notes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'retry_pending' }),
-          });
-        } catch (_) {}
       } catch (err: any) {
         setLastSyncTime(new Date().toLocaleTimeString());
         setLastSyncError(err.message || 'Network error');
@@ -210,12 +227,23 @@ export default function DashboardPage() {
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           {/* Sync Status Telemetry Bar */}
           {lastSyncTime && (
-            <div className={`mb-4 px-4 py-2 rounded-lg text-xs font-mono flex items-center gap-4 ${lastSyncError ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`}>
+            <div className={`mb-4 px-4 py-2 rounded-lg text-xs font-mono flex flex-wrap items-center gap-4 ${lastSyncError ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`}>
               <span className={`w-2 h-2 rounded-full ${lastSyncError ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
-              <span>Last sync: {lastSyncTime}</span>
+              <span className="font-semibold">Last sync: {lastSyncTime}</span>
+              {lastSyncAction && <span className="text-slate-700 font-sans">· {lastSyncAction}</span>}
+              {pendingNotesCount > 0 && (
+                <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
+                  {pendingNotesCount} note(s) queued for sync
+                </span>
+              )}
               {lastSyncError && <span className="text-amber-700">· Error: {lastSyncError}</span>}
-              {nextSyncIn !== null && <span>· Next: ~{nextSyncIn}s</span>}
-              <span className="ml-auto text-slate-500">Auto-poll: 65s</span>
+              {nextSyncIn !== null && <span>· Next slot: ~{nextSyncIn}s</span>}
+              <span className="ml-auto text-slate-500 flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-sans">
+                  {storageEngine === 'vercel_kv' ? 'Vercel KV REST' : 'Local Atomic Store'}
+                </span>
+                <span>Auto-poll: 65s</span>
+              </span>
             </div>
           )}
           {loading ? (

@@ -43,8 +43,8 @@ flowchart LR
 - **Screen:** Navigate to **"Book with Receipts"**. Click on the supported value **"£136,361"** next to `a_renewal`.
 - **Action:** The **Evidence & Audit Receipt Modal** slides open.
 - **Spoken Script:**
-  > *"Let's trace a number to where it came from. The renewal is nominal £350,000, but our morning qualified discovery value is £136,361. Why?*
-  > *Clicking into the receipt reveals the exact formula: our signed annual contract is verified at £350,000 by order form `doc_a_contract`, while our qualification model values the immediate operational renewal at £136,361 based on flight logs in `flight_log_force_month.csv` and fact `km_usage_1` proving 14 of 18 docks flew operationally last month in Westmere. We distinguish signed contract cash from discovery qualification, never confusing flight logs for pricing calculations, and we flag the remaining £213,639 as pending blocker clearance."*
+  > *"Let's trace a number to where it came from. The renewal has a nominal framework ceiling of £350,000, but our morning qualified discovery value is £136,361. Why?*
+  > *This receipt shows where the discovery estimate came from and which operational facts support its qualification. The estimate was recorded during the morning simulation; the flight logs in `flight_log_force_month.csv` and fact `km_usage_1` support the operational case by proving 14 of 18 docks flew operationally in Westmere to clear Rhys Calder's blocker, but they are not a commercial pricing formula. We distinguish signed contract cash (£350,000 baseline) from uncontracted discovery qualification, and isolate the remaining £213,639 as pending blocker clearance."*
 
 ---
 
@@ -57,14 +57,13 @@ flowchart LR
 ---
 
 ### [2:05 – 2:35] Scene 5: Live Events Ingestion & Writing Notes Back via MCP
-- **Screen:** Click **"Live Events Feed"**. Show the active "Auto-Polling Active (65s)" telemetry badge, then click **"Poll get_signals Now"** (top right). Then switch to **"Notes & Tasks (MCP)"**.
-- **Action:** Show the live sync status. In Notes & Tasks, fill in:
-  - Account: `Account A`
-  - Kind: `next_step`
-  - Text: `Dispatching data-flow pack to Fatima Osei for DPIA review.`
-  - Click **"Preview & Confirm Dispatch"**, then confirm.
+- **Screen:** Click **"Live Events Feed"**. Show the active telemetry bar with last sync time, engine status, and pending queue indicator. Then switch to **"Notes & Tasks (MCP)"**.
+- **Action:** Show the dual note states:
+  1. *Immediate sync:* When rate limit is clear, dispatching immediately marks the note with a green "synced" badge confirmed by Questathon MCP.
+  2. *Queued sync:* When rate limit cooldown is active, notes are saved as "locally pending" and tracked in the telemetry bar.
+  3. *Unified Scheduler:* During the next permitted slot (65s), our unified scheduler prioritizes draining the pending note before polling signals, preventing queue starvation.
 - **Spoken Script:**
-  > *"The system stays live automatically through background polling every 65 seconds — and supports instant manual sync — while strictly enforcing the distributed 1-call-per-minute rate limit lock. Under Notes & Tasks, writes are tracked with explicit sync status, distinguishing confirmed remote writes from locally saved notes, with cold-start persistence across restarts."*
+  > *"The system stays live automatically through background polling every 65 seconds — while strictly enforcing the distributed 1-call-per-minute rate limit. Under Notes & Tasks, writes are tracked with explicit sync status: immediate remote confirmation or queued local storage. Our unified background scheduler guarantees pending notes are prioritized and dispatched on the very next permitted slot rather than being starved by signal polling."*
 
 ---
 

@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendLiveSignalAsync, getCRMDataAsync } from '@/lib/data-store';
-import { getStorageDiagnosticsAsync } from '@/lib/storage';
+import { getStorageDiagnosticsAsync, getPendingNotesAsync, updateStoredNoteStatusAsync } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Unified Background Ingestion & Dispatch Scheduler.
+ * Intelligently coordinates the single 1-call-per-minute MCP rate limit quota:
+ * 1. Checks if any pending notes (saved_locally_pending or pending_retry) are awaiting remote write_note.
+ *    If yes: Prioritizes draining the oldest pending note! (Prevents pending notes from being starved).
+ * 2. If no pending notes: Queries get_signals from Questathon MCP and ingests new events atomically.
+ */
 async function handleSync() {
   const token = getSafeToken();
   if (!token) {
@@ -19,7 +26,8 @@ async function handleSync() {
     const currentData = await getCRMDataAsync();
     return NextResponse.json({
       success: false,
-      message: `Token allows 1 call per minute. Wait ${rateCheck.secondsRemaining}s before syncing again.`,
+      reason: 'rate_limited',
+      message: `Token allows 1 call per minute. Wait ${rateCheck.secondsRemaining}s before next MCP call.`,
       retryAfterSeconds: rateCheck.secondsRemaining,
       data: currentData,
       storage: await getStorageDiagnosticsAsync(),
@@ -27,7 +35,50 @@ async function handleSync() {
   }
 
   try {
-    // Attempt MCP tool call get_signals. No immediate REST fallback to prevent violating 1 call/min rule!
+    // Priority 1: Check for pending notes awaiting remote dispatch
+    const pendingNotes = await getPendingNotesAsync();
+
+    if (pendingNotes.length > 0) {
+      // Pick oldest pending note to dispatch
+      const noteToSync = pendingNotes[pendingNotes.length - 1];
+
+      const writeResult = await callTool('write_note', {
+        text: noteToSync.text,
+        account: noteToSync.accountId !== 'All Accounts' ? noteToSync.accountId : undefined,
+        kind: noteToSync.kind,
+        title: noteToSync.title,
+      });
+
+      if (writeResult.success) {
+        await updateStoredNoteStatusAsync(noteToSync.id, 'synced', new Date().toISOString());
+        const updatedData = await getCRMDataAsync();
+        return NextResponse.json({
+          success: true,
+          actionTaken: 'dispatched_pending_note',
+          dispatchedNoteId: noteToSync.id,
+          dispatchedNoteTitle: noteToSync.title,
+          remainingPendingCount: Math.max(0, pendingNotes.length - 1),
+          message: `Synced pending note "${noteToSync.title}" to Questathon MCP.`,
+          data: updatedData,
+          storage: await getStorageDiagnosticsAsync(),
+        });
+      } else {
+        await updateStoredNoteStatusAsync(noteToSync.id, 'pending_retry', undefined, writeResult.error);
+        const currentData = await getCRMDataAsync();
+        return NextResponse.json({
+          success: false,
+          actionTaken: 'pending_note_failed',
+          dispatchedNoteId: noteToSync.id,
+          remainingPendingCount: pendingNotes.length,
+          error: writeResult.error || 'Failed to dispatch pending note to MCP.',
+          retryAfterSeconds: writeResult.retryAfterSeconds,
+          data: currentData,
+          storage: await getStorageDiagnosticsAsync(),
+        });
+      }
+    }
+
+    // Priority 2: If no notes pending, poll get_signals
     const signalsResult = await callTool('get_signals', {});
 
     if (signalsResult.success && signalsResult.data) {
@@ -39,7 +90,6 @@ async function handleSync() {
       let addedCount = 0;
 
       for (const sig of incoming) {
-        // Prefer actual stable source ID or composite key with timestamp & source
         const stableId = sig.id
           ? String(sig.id)
           : (sig.signal_id
@@ -64,6 +114,7 @@ async function handleSync() {
       const updatedData = await getCRMDataAsync();
       return NextResponse.json({
         success: true,
+        actionTaken: 'fetched_signals',
         message: addedCount > 0 
           ? `Live sync complete: ${addedCount} new signal(s) ingested from MCP.`
           : 'Live sync complete: No new signals on Questathon server.',
@@ -76,6 +127,7 @@ async function handleSync() {
     const currentData = await getCRMDataAsync();
     return NextResponse.json({
       success: false,
+      actionTaken: 'signals_fetch_failed',
       error: signalsResult.error || 'Failed to fetch signals from MCP.',
       retryAfterSeconds: signalsResult.retryAfterSeconds,
       data: currentData,

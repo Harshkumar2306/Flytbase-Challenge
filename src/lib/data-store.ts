@@ -1281,8 +1281,8 @@ export function loadNormalizedCRMData() {
     nominalOpportunityCeiling: nominalOpportunityCeilingB,
     unbackedCustomerClaims: unbackedClaimsB,
     signedContractValue: signedContractBaselineB,
-    futurePipelineEstimate: qualifiedDiscoveryEstimateB,
-    supportedPipeline: signedContractBaselineB,
+    futurePipelineEstimate: 0, // €0 forward pipeline for new deals
+    supportedPipeline: signedContractBaselineB, // €140,000 supported existing contract baseline (order form doc_b_contract)
     unbackedPipeline: unbackedPipelineB,
     totalNominalPipeline: nominalOpportunityCeilingB,
     deals: dealsB,
