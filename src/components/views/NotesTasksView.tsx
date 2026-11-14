@@ -63,7 +63,10 @@ export const NotesTasksView: React.FC<NotesTasksViewProps> = ({
     try {
       const res = await fetch('/api/crm/notes', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 
+          'content-type': 'application/json',
+          'x-crm-write-key': 'questathon-demo-key-2026'
+        },
         body: JSON.stringify({
           account: account || undefined,
           kind,

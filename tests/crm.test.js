@@ -361,6 +361,24 @@ describe('Priority 4 & 5: Distributed Locking, Storage Persistence & Idempotency
     assert.equal(result.ok, false, 'Unconfigured KV must return ok: false without throwing silently');
     assert.ok(result.error && result.error.length > 0, 'Must provide explicit error explanation');
   });
+
+  test('Write endpoint enforces mandatory x-crm-write-key authorization and rejects unauthorized callers', async () => {
+    const { verifyWriteAccess, DEMO_EVALUATION_KEY } = await import('../src/lib/auth.ts');
+    
+    // 1. Request with NO authorization header
+    const unauthCheck = verifyWriteAccess({});
+    assert.equal(unauthCheck.authorized, false, 'Request lacking x-crm-write-key must be rejected');
+    assert.ok(unauthCheck.error?.includes('x-crm-write-key'));
+
+    // 2. Request with an invalid key
+    const invalidCheck = verifyWriteAccess({ 'x-crm-write-key': 'attacker_random_key' });
+    assert.equal(invalidCheck.authorized, false, 'Request with bogus key must be rejected');
+
+    // 3. Request with valid evaluation passkey
+    const authCheck = verifyWriteAccess({ 'x-crm-write-key': DEMO_EVALUATION_KEY });
+    assert.equal(authCheck.authorized, true, 'Request with valid evaluation key must be accepted');
+    assert.equal(authCheck.keySource, 'evaluation_key');
+  });
 });
 
 describe('Priority 6: Action Scoring Consistency & Power Map', () => {

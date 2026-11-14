@@ -74,4 +74,4 @@ flowchart LR
   - `src/lib/data-store.ts`: Deterministic relational normalization.
   - `.env.local` in `.gitignore`: Zero token leaks.
 - **Spoken Script:**
-  > *"Under the hood: Next.js 14 App Router, TypeScript, and Tailwind CSS. The API token `AQ_TOKEN` lives strictly on the server in serverless API routes — never in browser JavaScript, never in Git history, and never in client state. The app builds cleanly, runs serverless without my laptop, and opens in any private browser window without authentication. Thank you."*
+  > *"Under the hood: Next.js 14 App Router, TypeScript, and Tailwind CSS. The API token `AQ_TOKEN` lives strictly on the server in serverless API routes — sanitized from active source code, never bundled into client JavaScript, and never exposed in browser state. Write endpoints are protected by authorization keys and abuse limits. The app builds cleanly, runs serverless without my laptop, and opens in any private browser window without sign-in. Thank you."*

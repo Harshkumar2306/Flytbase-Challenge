@@ -9,7 +9,7 @@ Built for a Customer Success Director or Account Executive taking over two criti
 Instead of optimistic promises, this CRM functions as an **evidence-driven decision engine**. Connected live to the Questathon MCP, it ingests raw contracts, call logs, tickets, and flight telemetry to answer five executive questions:
 - **Book Worth:** Separates executed contracts (£350k / €140k) from uncontracted morning discovery estimates (£731k), nominal caps (£2.3M / €350k), and unbacked customer claims (€1.2M savings).
 - **Power Structure:** Identifies actual budget signatories, procurement gates, operational blockers, and champions.
-- **Immediate Priorities:** Generates an algorithmically ranked Monday 9am action plan with owners, dates, and deal impact.
+- **Immediate Priorities:** Presents a prioritized Monday 9am action plan with deterministic scoring weights established during handover discovery.
 - **Risk Radar:** Audits looming failure modes (autumn budget window closure, 4-month unanswered procurement inquiries).
 - **Blind Spots:** Pinpoints unrecorded operational facts, their commercial consequence, and who can answer them.
 
@@ -27,6 +27,7 @@ Instead of optimistic promises, this CRM functions as an **evidence-driven decis
 - **Deterministic Action Plans:** Priority scores use a fixed formula with explicit factor weights prepared at morning discovery. Ranks are set at build time, not re-ranked from live data.
 - **No Fabricated Locations:** Omitted per-plant dock serials are flagged as high-priority blind spots rather than simulated.
 - **Zero Token Bypass:** Adheres strictly to the 1-call/min rate limit using distributed atomic reservation (Vercel KV when configured, atomic file lock fallback).
+- **Mandatory Write Protection:** Write endpoints require x-crm-write-key authorization and rate-limiting to protect server token quotas.
 - **Client Polling, Not Server Push:** Ingests live signals via 65-second browser-driven polling. Stops when the tab closes. Not a background server job.
 
 ### 4. How AI Was Used

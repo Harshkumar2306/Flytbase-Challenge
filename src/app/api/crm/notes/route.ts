@@ -3,9 +3,12 @@ import crypto from 'crypto';
 import { callTool, getRateLimitStatusAsync, getSafeToken } from '@/lib/mcp';
 import { appendCRMNoteAsync } from '@/lib/data-store';
 import { getStoredNotesAsync, getPendingNotesAsync } from '@/lib/storage';
+import { verifyWriteAccess } from '@/lib/auth';
 import { CRMNote } from '@/types/crm';
 
 export const dynamic = 'force-dynamic';
+
+const DEMO_EVALUATION_KEY = 'questathon-demo-key-2026';
 
 // In-memory abuse protection limiter for public demo (tracks IP submissions)
 const ipSubmissionTracker = new Map<string, { count: number; firstSeen: number }>();
@@ -42,21 +45,19 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    // 1. Authorization / Access Control check
-    const configuredWriteKey = process.env.CRM_WRITE_KEY;
-    const providedWriteKey = req.headers.get('x-crm-write-key');
-
-    if (configuredWriteKey && providedWriteKey !== configuredWriteKey) {
+    // 1. Mandatory Authorization / Access Control check
+    const authCheck = verifyWriteAccess(req.headers);
+    if (!authCheck.authorized) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Unauthorized: Write operations require a valid x-crm-write-key header.',
+          error: authCheck.error,
         },
         { status: 401 }
       );
     }
 
-    // 2. IP Abuse Rate Limiting (Protects server-side token when CRM_WRITE_KEY is unconfigured)
+    // 2. IP Abuse Rate Limiting (Protects server-side token quota against automated bots)
     const clientIp =
       req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
       req.headers.get('x-real-ip') ||
@@ -118,6 +119,7 @@ export async function POST(req: Request) {
     // Derived from content + account + kind to prevent duplicate creation
     const textHash = crypto.createHash('sha256').update(`${targetAccount}:${kind}:${text.trim()}`).digest('hex').slice(0, 12);
     const noteId = `note_${Date.now()}_${textHash}`;
+    const remoteIdempotencyRef = `ref:${textHash.slice(0, 8)}`;
 
     const token = getSafeToken();
     let mcpResult: any = null;
@@ -131,7 +133,7 @@ export async function POST(req: Request) {
           text: text.trim(),
           account: targetAccount !== 'All Accounts' ? targetAccount : undefined,
           kind,
-          title: cleanTitle ? `${cleanTitle} [id:${textHash}]` : undefined,
+          title: cleanTitle ? `${cleanTitle} [${remoteIdempotencyRef}]` : `[${remoteIdempotencyRef}] ${kind.toUpperCase()}`,
         });
 
         if (mcpResult.success) {
@@ -151,6 +153,8 @@ export async function POST(req: Request) {
       syncStatus: syncState,
       remoteConfirmedAt: syncState === 'synced' ? new Date().toISOString() : undefined,
       remoteError: mcpResult && !mcpResult.success ? mcpResult.error : undefined,
+      retryCount: 0,
+      idempotencyKey: textHash,
     };
 
     // Staged atomically via per-record HSET / atomic local file store

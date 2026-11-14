@@ -46,7 +46,6 @@ function atomicWriteJson<T>(filename: string, data: T): void {
   const tmpFilePath = path.join(TMP_DIR, filename);
   const stagingPath = path.join(TMP_DIR, `.${filename}.${Date.now()}.${Math.random().toString(36).substring(2)}.tmp`);
 
-  // Write to staging path then atomically rename
   try {
     fs.writeFileSync(stagingPath, content, 'utf8');
     fs.renameSync(stagingPath, tmpFilePath);
@@ -57,16 +56,13 @@ function atomicWriteJson<T>(filename: string, data: T): void {
     } catch (_) {}
   }
 
-  // Also persist to project data/ directory if writable and not running unit tests
   if (process.env.NODE_ENV !== 'test') {
     try {
       const dataPath = path.join(DATA_DIR, filename);
       const dataStaging = path.join(DATA_DIR, `.${filename}.tmp`);
       fs.writeFileSync(dataStaging, content, 'utf8');
       fs.renameSync(dataStaging, dataPath);
-    } catch (_) {
-      // Expected on read-only serverless runtime
-    }
+    } catch (_) {}
   }
 }
 
@@ -74,7 +70,6 @@ function readJsonWithFallback<T>(filename: string, fallback: T): T {
   const tmpFilePath = path.join(TMP_DIR, filename);
   const dataPath = path.join(DATA_DIR, filename);
 
-  // Check /tmp first for latest dynamic serverless state
   try {
     if (fs.existsSync(tmpFilePath)) {
       const content = fs.readFileSync(tmpFilePath, 'utf8');
@@ -82,7 +77,6 @@ function readJsonWithFallback<T>(filename: string, fallback: T): T {
     }
   } catch (_) {}
 
-  // Fallback to project data directory
   try {
     if (fs.existsSync(dataPath)) {
       const content = fs.readFileSync(dataPath, 'utf8');
@@ -150,7 +144,7 @@ export async function kvRestCall<T>(command: string, ...args: (string | number)[
 
 // ==========================================
 // SEPARATED DISTRIBUTED LOCK IMPLEMENTATION
-// In-flight execution lock + Cooldown lock with owner verification
+// In-flight execution lock + Cooldown lock with atomic Lua compare-and-delete
 // ==========================================
 
 export function readLockRecord(): McpLockRecord {
@@ -255,20 +249,19 @@ export async function acquireDistributedLock(): Promise<{
 }
 
 /**
- * Release in-flight lock safely with owner verification.
- * Only the owner who acquired the lock can release it.
+ * Release in-flight lock safely with atomic compare-and-delete.
+ * Uses Redis Lua script in Vercel KV to guarantee atomic ownership check and deletion.
  */
 export async function releaseDistributedLock(ownerToken?: string, cooldownSeconds = 61): Promise<void> {
   const now = Date.now();
 
   if (detectStorageEngine() === 'vercel_kv') {
     try {
-      // Safe release: only delete in-flight lock if ownerToken matches
+      // Atomic Lua script compare-and-delete:
+      // Deletes questathon:mcp:inflight ONLY IF its current value equals ownerToken
       if (ownerToken) {
-        const currentOwnerRes = await kvRestCall<string>('get', 'questathon:mcp:inflight');
-        if (currentOwnerRes.ok && currentOwnerRes.result === ownerToken) {
-          await kvRestCall('del', 'questathon:mcp:inflight');
-        }
+        const luaScript = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+        await kvRestCall('eval', luaScript, 1, 'questathon:mcp:inflight', ownerToken);
       } else {
         await kvRestCall('del', 'questathon:mcp:inflight');
       }
@@ -307,10 +300,8 @@ export async function releaseDistributedLockOnError(ownerToken?: string, retryAf
   if (detectStorageEngine() === 'vercel_kv') {
     try {
       if (ownerToken) {
-        const currentOwnerRes = await kvRestCall<string>('get', 'questathon:mcp:inflight');
-        if (currentOwnerRes.ok && currentOwnerRes.result === ownerToken) {
-          await kvRestCall('del', 'questathon:mcp:inflight');
-        }
+        const luaScript = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+        await kvRestCall('eval', luaScript, 1, 'questathon:mcp:inflight', ownerToken);
       } else {
         await kvRestCall('del', 'questathon:mcp:inflight');
       }
@@ -429,9 +420,26 @@ export function getStoredNotes(): CRMNote[] {
 export async function getStoredNotesAsync(): Promise<CRMNote[]> {
   if (detectStorageEngine() === 'vercel_kv') {
     try {
-      // Use HVALS for atomic retrieval of all notes stored as individual hash fields
       const res = await kvRestCall<string[]>('hvals', 'questathon:notes:hash');
-      if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
+      if (res.ok && Array.isArray(res.result)) {
+        // Successful response from Redis!
+        if (res.result.length === 0) {
+          // Check for legacy migration on first initialization
+          const legacyRes = await kvRestCall<any>('get', 'questathon:notes');
+          if (legacyRes.ok && legacyRes.result) {
+            const legacyParsed = typeof legacyRes.result === 'string' ? JSON.parse(legacyRes.result) : legacyRes.result;
+            const notesList: CRMNote[] = Array.isArray(legacyParsed) ? legacyParsed : legacyParsed.notes || [];
+            if (notesList.length > 0) {
+              for (const n of notesList) {
+                await kvRestCall('hset', 'questathon:notes:hash', n.id, JSON.stringify(n));
+              }
+              return notesList;
+            }
+          }
+          // The distributed KV store is legitimately empty; do NOT read stale local fallback files!
+          return [];
+        }
+
         const parsed = res.result
           .map((item) => {
             try {
@@ -446,16 +454,7 @@ export async function getStoredNotesAsync(): Promise<CRMNote[]> {
         return parsed;
       }
 
-      // Legacy fallback migration: if hash is empty, check legacy key
-      const legacyRes = await kvRestCall<any>('get', 'questathon:notes');
-      if (legacyRes.ok && legacyRes.result) {
-        const legacyParsed = typeof legacyRes.result === 'string' ? JSON.parse(legacyRes.result) : legacyRes.result;
-        const notesList: CRMNote[] = Array.isArray(legacyParsed) ? legacyParsed : legacyParsed.notes || [];
-        for (const n of notesList) {
-          await kvRestCall('hset', 'questathon:notes:hash', n.id, JSON.stringify(n));
-        }
-        return notesList;
-      }
+      lastRecordedKvError = res.error || 'KV HVALS failed';
     } catch (e: any) {
       console.error('Failed reading notes from Vercel KV hash, using local store:', e);
       lastRecordedKvError = e?.message;
@@ -481,13 +480,13 @@ export function saveStoredNote(note: CRMNote): void {
  * Two concurrent notes will each set their own field without overwriting the other!
  */
 export async function saveStoredNoteAsync(note: CRMNote): Promise<{ success: boolean; error?: string }> {
-  // Always stage locally first for resilient fallback
   saveStoredNote(note);
 
   if (detectStorageEngine() === 'vercel_kv') {
     const res = await kvRestCall<number>('hset', 'questathon:notes:hash', note.id, JSON.stringify(note));
     if (!res.ok) {
       console.error('Vercel KV HSET note failed:', res.error);
+      lastRecordedKvError = res.error;
       return { success: false, error: res.error };
     }
     return { success: true };
@@ -516,7 +515,8 @@ export async function updateStoredNoteStatusAsync(
   noteId: string,
   status: 'synced' | 'saved_locally_pending' | 'pending_retry',
   confirmedAt?: string,
-  remoteError?: string
+  remoteError?: string,
+  retryIncrement = false
 ): Promise<{ success: boolean; error?: string }> {
   updateStoredNoteStatus(noteId, status, confirmedAt, remoteError);
 
@@ -528,6 +528,10 @@ export async function updateStoredNoteStatusAsync(
         note.syncStatus = status;
         if (confirmedAt) note.remoteConfirmedAt = confirmedAt;
         if (remoteError) note.remoteError = remoteError;
+        if (retryIncrement) {
+          note.retryCount = (note.retryCount || 0) + 1;
+          note.lastAttemptAt = new Date().toISOString();
+        }
         const setRes = await kvRestCall('hset', 'questathon:notes:hash', noteId, JSON.stringify(note));
         if (!setRes.ok) return { success: false, error: setRes.error };
       }
@@ -559,7 +563,12 @@ export async function getStoredSignalsAsync(): Promise<LiveSignal[]> {
   if (detectStorageEngine() === 'vercel_kv') {
     try {
       const res = await kvRestCall<string[]>('hvals', 'questathon:signals:hash');
-      if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
+      if (res.ok && Array.isArray(res.result)) {
+        // Successful response from Redis!
+        if (res.result.length === 0) {
+          return [];
+        }
+
         const parsed = res.result
           .map((item) => {
             try {
@@ -573,6 +582,8 @@ export async function getStoredSignalsAsync(): Promise<LiveSignal[]> {
         parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         return parsed;
       }
+
+      lastRecordedKvError = res.error || 'KV signals HVALS failed';
     } catch (e: any) {
       console.error('Failed reading signals from Vercel KV hash, using local store:', e);
       lastRecordedKvError = e?.message;
@@ -622,6 +633,7 @@ export async function saveStoredSignalAsync(signal: LiveSignal): Promise<boolean
     // HSETNX atomically sets field ONLY IF it does not exist yet! Returns 1 if set, 0 if exists.
     const res = await kvRestCall<number>('hsetnx', 'questathon:signals:hash', compositeKey, JSON.stringify(signal));
     if (!res.ok) {
+      lastRecordedKvError = res.error;
       return localInserted;
     }
     return res.result === 1;
@@ -631,7 +643,7 @@ export async function saveStoredSignalAsync(signal: LiveSignal): Promise<boolean
 }
 
 // ==========================================
-// STORAGE DIAGNOSTICS & DEGRADED STATE VISIBILITY
+// ACTIVE STORAGE HEALTH CHECK & DIAGNOSTICS
 // ==========================================
 
 export function getStorageDiagnostics(): StorageDiagnostics {
@@ -663,10 +675,32 @@ export function getStorageDiagnostics(): StorageDiagnostics {
   };
 }
 
+/**
+ * Asynchronously query diagnostics with an ACTIVE Redis ping health probe.
+ * Never reports healthy distributed persistence based only on configured environment variables.
+ */
 export async function getStorageDiagnosticsAsync(): Promise<StorageDiagnostics> {
   const engine = detectStorageEngine();
 
   if (engine === 'vercel_kv') {
+    // 1. Actively probe KV health
+    const pingRes = await kvRestCall<string>('ping');
+    const isHealthy = pingRes.ok && (pingRes.result === 'PONG' || typeof pingRes.result === 'string');
+
+    if (!isHealthy) {
+      const activeError = pingRes.error || 'KV ping health probe failed';
+      lastRecordedKvError = activeError;
+      const localDiag = getStorageDiagnostics();
+      return {
+        ...localDiag,
+        engine: 'vercel_kv',
+        isDistributed: true,
+        kvConnected: false,
+        status: 'degraded_local_fallback',
+        lastKvError: activeError,
+      };
+    }
+
     try {
       const [notes, signals, rate] = await Promise.all([
         getStoredNotesAsync(),
@@ -675,20 +709,21 @@ export async function getStorageDiagnosticsAsync(): Promise<StorageDiagnostics> 
       ]);
 
       const pending = notes.filter((n) => n.syncStatus !== 'synced');
+      lastRecordedKvError = undefined;
 
       return {
-        engine,
+        engine: 'vercel_kv',
         engineDescription: 'Vercel KV REST (Multi-instance atomic hash store active across cold starts)',
         isDistributed: true,
-        kvConnected: !lastRecordedKvError,
-        status: lastRecordedKvError ? 'degraded_local_fallback' : 'healthy',
+        kvConnected: true,
+        status: 'healthy',
         notesCount: notes.length,
         signalsCount: signals.length,
         pendingNotesCount: pending.length,
         isLocked: rate.inFlight || !rate.canCallNow,
         secondsRemaining: rate.secondsRemaining,
         inFlight: rate.inFlight,
-        lastKvError: lastRecordedKvError,
+        lastKvError: undefined,
       };
     } catch (err: any) {
       lastRecordedKvError = err?.message;

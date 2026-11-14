@@ -213,6 +213,9 @@ export interface CRMNote {
   syncStatus?: 'synced' | 'saved_locally_pending' | 'pending_retry';
   remoteConfirmedAt?: string;
   remoteError?: string;
+  retryCount?: number;
+  lastAttemptAt?: string;
+  idempotencyKey?: string;
 }
 
 export interface EvidenceRecord {

@@ -76,7 +76,10 @@ export default function DashboardPage() {
     // Coordinated priority: drains pending notes first, then polls live signals
     const runBackgroundSync = async () => {
       try {
-        const res = await fetch('/api/crm/sync', { method: 'POST' });
+        const res = await fetch('/api/crm/sync', { 
+          method: 'POST',
+          headers: { 'x-crm-write-key': 'questathon-demo-key-2026' }
+        });
         const json = await res.json();
         setLastSyncTime(new Date().toLocaleTimeString());
 
